@@ -60,11 +60,23 @@ The idempotency row keeps the first answer for 24 hours (`expires`). The status 
 ## Visitor address is signed
 `x-mpc-ip` is part of the signed text when it is sent, so it cannot be changed after signing.
 
-## Accepted known limits (v0.1.2)
+## Accepted known limits (v0.1.3)
 - One global Durable Object serialises the counters for all instances; shard it by instance later.
 - Digit runs split by letters (for example `1234abcd5678`) are not scrubbed.
 - Team listing across instances needs a per-product rule when Cloudflare Access is built.
-- `topic` is stored unscrubbed on purpose: it is limited to `[a-z0-9-]{1,40}`, so it cannot hold free text. Not a defect.
+- `topic` is stored unscrubbed on purpose: it is limited to `[a-z0-9-]{1,40}` and a topic with 8 or more digits in total is refused (`bad_request`, field `topic`), so it cannot hold a card or phone number.
 
 ## Missing visitor address
 If `x-mpc-ip` is missing, the rate-limit bucket is a hash of the signed session id. One bucket is never shared by all visitors.
+
+## Product backends must always send x-mpc-ip
+Every product backend must send `x-mpc-ip` (the visitor address) on every signed call. The product backend picks the session id, so a bucket built from it can be changed by that backend. To refuse a call without the header, set `require_ip: true` in the instance record (default `false`). The call then fails with `bad_request`, field `x-mpc-ip`.
+
+## Secret rotation
+Encryption of the stored status token always uses the first (primary) secret. Opening tries every active secret. During a rotation the old secret stays configured for 24 hours, the same time an idempotency row lives, so a replay sealed with the old secret still opens. After 24 hours remove the old secret.
+
+## Encryption key
+The AES-GCM key is the raw 32 bytes of the HMAC-SHA-256 digest (256 bits). Nothing is deployed yet, so no migration is needed.
+
+## Counters on a store failure
+If the store throws while a ticket is created, the limit counters taken for that call are given back before the error goes on.

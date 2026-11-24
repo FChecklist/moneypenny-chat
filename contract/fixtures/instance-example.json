@@ -8,5 +8,6 @@
   "role_map": { "host": "co-organizer", "organizer": "organizer" },
   "core_min": "0.1",
   "core_max": "0.x",
-  "kb_version": "example-1"
+  "kb_version": "example-1",
+  "require_ip": false
 }

@@ -1,10 +1,11 @@
 const enc = new TextEncoder();
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
 export const sha256hex = async (data) => hex(await crypto.subtle.digest('SHA-256', typeof data === 'string' ? enc.encode(data) : data));
-export async function hmacHex(secret, msg) {
+async function hmacRaw(secret, msg) {
   const k = await crypto.subtle.importKey('raw', enc.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  return hex(await crypto.subtle.sign('HMAC', k, enc.encode(msg)));
+  return crypto.subtle.sign('HMAC', k, enc.encode(msg));
 }
+export const hmacHex = async (secret, msg) => hex(await hmacRaw(secret, msg));
 export function timingEqual(a, b) {
   a = String(a); b = String(b);
   if (a.length !== b.length) return false;
@@ -15,8 +16,8 @@ export const b64url = (s) => btoa(String.fromCharCode(...enc.encode(s))).replace
 export const unb64url = (s) => new TextDecoder().decode(Uint8Array.from(atob(String(s).replace(/-/g, '+').replace(/_/g, '/')), (c) => c.charCodeAt(0)));
 export const randomToken = (bytes = 32) => { const a = crypto.getRandomValues(new Uint8Array(bytes)); return btoa(String.fromCharCode(...a)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''); };
 
-// Encrypt a short text with AES-GCM. The key is derived from a secret (HMAC of a fixed label). Output: b64url(iv + cipher).
-const aesKey = async (secret) => crypto.subtle.importKey('raw', enc.encode(await hmacHex(secret, 'mpc-idem-v1')).slice(0, 32), 'AES-GCM', false, ['encrypt', 'decrypt']);
+// Encrypt a short text with AES-GCM. The key is the raw 32 bytes of the HMAC-SHA-256 of a fixed label (256 bits). Output: b64url(iv + cipher).
+const aesKey = async (secret) => crypto.subtle.importKey('raw', await hmacRaw(secret, 'mpc-idem-v1'), 'AES-GCM', false, ['encrypt', 'decrypt']);
 export async function encryptText(secret, text) {
   const iv = crypto.getRandomValues(new Uint8Array(12)), ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, await aesKey(secret), enc.encode(text)));
   const all = new Uint8Array(12 + ct.length); all.set(iv); all.set(ct, 12);

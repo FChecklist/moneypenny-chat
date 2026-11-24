@@ -1,5 +1,13 @@
 # Moneypenny Chat changelog
 
+## 0.1.3 - 25 Nov 2026 - round 3 fixes
+- Tickets: a topic with 8 or more digits in total is refused (`bad_request`, field `topic`).
+- Rate limit: counters taken before the store call are given back when the store throws.
+- Instance: new setting `require_ip` (default `false`). When `true`, a call without `x-mpc-ip` is refused with `bad_request`.
+- Crypto: the AES key is now the raw 32 bytes of the digest (256 bits).
+- Docs: product backends must always send `x-mpc-ip`; secret rotation keeps the old secret for 24 hours.
+- Tests: one new test per fix.
+
 ## 0.1.2 - 25 Nov 2026 - round 2 fixes from two audits
 - Idempotency: the status token in the stored answer is now encrypted (AES-GCM, key from the instance secret). The raw token is never stored. Replays decrypt it.
 - Signature: `x-mpc-ip` is part of the signed text when the header is sent. A changed address fails with `bad_signature`.

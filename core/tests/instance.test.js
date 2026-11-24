@@ -8,13 +8,13 @@ test('S-011 the example record is valid', () => expect(validateInstance(good()).
 const bad = [
   ['id', { id: 'A' }], ['id', { id: undefined }], ['name', { name: '' }], ['origins empty', { allowed_origins: [] }], ['origin http', { allowed_origins: ['http://a.test'] }],
   ['origin with path', { allowed_origins: ['https://a.test/x'] }], ['retention', { retention_class: 'forever' }], ['enabled', { enabled: 'yes' }], ['routes label', { routes: { '/a': '' } }],
-  ['routes key', { routes: { 'a': 'A' } }], ['routes key digits', { routes: { '/game/123': 'A' } }], ['routes key at', { routes: { '/a@b': 'A' } }], ['role_map', { role_map: { x: 'admin' } }], ['core_min', { core_min: 'one' }], ['tickets_per_day', { tickets_per_day: 0 }], ['brand', { brand: { primary: 'red' } }],
+  ['routes key', { routes: { 'a': 'A' } }], ['routes key digits', { routes: { '/game/123': 'A' } }], ['routes key at', { routes: { '/a@b': 'A' } }], ['role_map', { role_map: { x: 'admin' } }], ['core_min', { core_min: 'one' }], ['tickets_per_day', { tickets_per_day: 0 }], ['require_ip', { require_ip: 'yes' }], ['brand', { brand: { primary: 'red' } }],
 ];
 for (const [name, patch] of bad) test('S-011 invalid: ' + name, () => { const r = validateInstance({ ...good(), ...patch }); expect(r.ok).toBe(false); expect(r.errors.length).toBeGreaterThan(0); });
 test('S-011 not an object', () => { for (const v of [null, [], 'x', 5]) expect(validateInstance(v).ok).toBe(false); });
 test('S-011 schema file lists the same required fields as the validator', () => {
   for (const k of schema.required) expect(validateInstance({ ...good(), [k]: undefined }).ok, k).toBe(false);
-  expect(Object.keys(schema.properties).sort()).toEqual(['allowed_origins', 'brand', 'core_max', 'core_min', 'enabled', 'id', 'kb_version', 'name', 'retention_class', 'role_map', 'routes', 'tickets_per_day']);
+  expect(Object.keys(schema.properties).sort()).toEqual(['allowed_origins', 'brand', 'core_max', 'core_min', 'enabled', 'id', 'kb_version', 'name', 'require_ip', 'retention_class', 'role_map', 'routes', 'tickets_per_day']);
 });
 test('S-011 parseInstances drops invalid and disabled records, bad JSON gives none', () => {
   expect([...parseInstances(JSON.stringify([good(), { id: 'x' }, { ...good(), id: 'off-one', enabled: false }])).keys()]).toEqual(['example-product']);

@@ -25,6 +25,7 @@ export function validateInstance(c) {
   for (const k of ['core_min', 'core_max']) if (c[k] !== undefined && !(typeof c[k] === 'string' && (k === 'core_max' ? VERMAX : VER).test(c[k]))) errors.push(`${k}: like 0.1 (core_max may be 0.x)`);
   if (c.kb_version !== undefined && (typeof c.kb_version !== 'string' || c.kb_version.length > 40)) errors.push('kb_version: text up to 40 chars');
   if (c.tickets_per_day !== undefined && !(Number.isInteger(c.tickets_per_day) && c.tickets_per_day >= 1 && c.tickets_per_day <= 10000)) errors.push('tickets_per_day: whole number 1 to 10000');
+  if (c.require_ip !== undefined && typeof c.require_ip !== 'boolean') errors.push('require_ip: true or false');
   if (c.brand !== undefined && !(c.brand && typeof c.brand === 'object' && /^#[0-9a-fA-F]{6}$/.test(c.brand.primary || ''))) errors.push('brand.primary: colour like #1a2b3c');
   return errors.length ? { ok: false, errors } : { ok: true, value: c };
 }

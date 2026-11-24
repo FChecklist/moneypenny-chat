@@ -22,7 +22,7 @@ export function validateTicket(b, inst) {
   const type = b.type ?? null;
   if (b.option === 'suggest' ? !TYPES.includes(type) : type !== null) return bad('type');
   const topic = b.topic ?? null;
-  if (topic !== null && !(typeof topic === 'string' && TOPIC.test(topic))) return bad('topic');
+  if (topic !== null && !(typeof topic === 'string' && TOPIC.test(topic) && (topic.match(/\d/g) || []).length < 8)) return bad('topic'); // 8 or more digits in total: refused, like scrub
   if (b.text !== undefined && typeof b.text !== 'string') return bad('text');
   const text = clean(b.text ?? ''), n = len(text);
   if (n > 600) return bad('text');
@@ -80,10 +80,11 @@ export async function createTicket(ctx, inst, { raw, b, a, idemHeader, ip }) {
   if (!lim.ok) return { error: 'rate', extra: { retry_after: lim.retryAfter }, headers: { 'retry-after': String(lim.retryAfter) } };
   const token = randomToken(32), tokenHash = await sha256hex(token), erase = eraseAtCreate(inst.retention_class, now);
   const sealed = await encryptText(ctx.secrets(inst.id, 'sign')[0], token);
-  const res = await ctx.store.createTicket(inst.id, id, (number) => ({
+  let res;
+  try { res = await ctx.store.createTicket(inst.id, id, (number) => ({
     row: { number, option: t.option, type: t.type, topic: t.topic, screen: scrub(t.screen), screen_label: scrub(t.label), text: scrub(t.text), screenshot_id: null, role: t.role, client_class: t.client.class, client_w: t.client.w, status: 'new', team_note: '', created: now, updated: now, done_at: null, erase_at: erase, token_hash: tokenHash },
     response: { ticket: number, status_token: sealed, erase_at: iso(erase) }, // the stored copy holds the token only encrypted
-  }), now);
+  }), now); } catch (e) { await give(ctx, lim.taken).catch(() => {}); throw e; } // a throw gives the counters back
   if (res.status !== 'created') await give(ctx, lim.taken); // lost a race with the same key
   if (res.status === 'conflict') return { error: 'idempotency_conflict' };
   return { status: 201, body: await open(ctx, inst, res.response), headers: res.status === 'replay' ? { 'idempotent-replay': 'true' } : {} };

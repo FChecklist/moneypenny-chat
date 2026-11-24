@@ -227,3 +227,37 @@ test('round2: d1 createTicket placeholder order gives T-0001 then T-0002, and a 
   const again = await st.createTicket('p', { keyHash: 'k1', bodyHash: 'b' }, mk, 1);
   expect(again.status).toBe('replay'); expect(again.response).toEqual({ ticket: 'T-0001' });
 });
+
+// Round 3
+test('round3: topic with 8 or more digits in total is refused; 7 digits pass', async () => {
+  const e = makeEnv(), mk = (topic) => ({ ...fixture('ticket-help.json'), topic });
+  for (const t of ['a1b2c3d4e5f6g7h8', '1'.repeat(40), 'x-1234-5678']) { const r = await e.call('POST', '/v1/tickets', mk(t)); expect(r.status).toBe(400); const j = await r.json(); expect(j.error).toBe('bad_request'); expect(j.field).toBe('topic'); }
+  expect((await e.call('POST', '/v1/tickets', mk('abc-1234567'))).status).toBe(201);
+});
+test('round3: a store that throws gives the counters back', async () => {
+  const e = makeEnv(); const real = e.store.createTicket; let boom = true;
+  e.store.createTicket = async (...a) => { if (boom) throw new Error('store down'); return real.apply(e.store, a); };
+  for (let i = 0; i < 8; i++) { const r = await e.call('POST', '/v1/tickets', fixture('ticket-help.json')).catch(() => null); expect(r === null || r.status !== 429).toBe(true); }
+  boom = false; // the session limit is 5 an hour: without give-back the next call would be 429
+  expect((await e.call('POST', '/v1/tickets', fixture('ticket-help.json'))).status).toBe(201);
+});
+test('round3: require_ip refuses a missing x-mpc-ip; default and false accept it', async () => {
+  const on = makeEnv({ instance: { ...fixture('instance-example.json'), require_ip: true } });
+  const r = await on.call('POST', '/v1/tickets', fixture('ticket-help.json'), { ip: '' }); expect(r.status).toBe(400); expect((await r.json()).field).toBe('x-mpc-ip');
+  expect((await on.call('POST', '/v1/tickets', fixture('ticket-help.json'))).status).toBe(201);
+  expect((await makeEnv().call('POST', '/v1/tickets', fixture('ticket-help.json'), { ip: '' })).status).toBe(201);
+});
+test('round3: AES key is the raw 32 digest bytes (round trip, and not the old hex-slice key)', async () => {
+  const { encryptText, decryptText, hmacHex } = await import('../src/crypto.js'); const S = 'k'.repeat(32), enc = new TextEncoder();
+  expect(await decryptText([S], await encryptText(S, 'hello'))).toBe('hello');
+  const old = await crypto.subtle.importKey('raw', enc.encode(await hmacHex(S, 'mpc-idem-v1')).slice(0, 32), 'AES-GCM', false, ['encrypt']);
+  const iv = new Uint8Array(12), ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, old, enc.encode('x')));
+  const all = new Uint8Array(12 + ct.length); all.set(iv); all.set(ct, 12);
+  expect(await decryptText([S], btoa(String.fromCharCode(...all)))).toBeNull();
+});
+test('round3: a replay sealed with the old secret opens while both secrets are configured', async () => {
+  const { encryptText, decryptText } = await import('../src/crypto.js'); const OLD = 'o'.repeat(32), NEW = 'n'.repeat(32);
+  const sealed = await encryptText(OLD, 'tok-123');
+  expect(await decryptText([NEW, OLD], sealed)).toBe('tok-123');
+  expect(await decryptText([NEW], sealed)).toBeNull();
+});

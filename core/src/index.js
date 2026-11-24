@@ -40,7 +40,9 @@ async function signed(ctx, req, path, number) {
   const a = await verifyAssertion(req.headers.get('x-mpc-assertion'), { secrets: ctx.secrets(id, 'assert'), product: id, roleMap: inst.role_map, now: ctx.now() });
   if (!a.ok) return fail(a.error);
   const p = parseJsonObject(raw); if (!p.ok) return fail('bad_request');
-  return out(await T.createTicket(ctx, inst, { raw, b: p.value, a, idemHeader: req.headers.get('idempotency-key'), ip: req.headers.get('x-mpc-ip') || 'sess:' + (await sha256hex(a.sess)) }));
+  const addr = req.headers.get('x-mpc-ip');
+  if (!addr && inst.require_ip === true) return fail('bad_request', { field: 'x-mpc-ip' });
+  return out(await T.createTicket(ctx, inst, { raw, b: p.value, a, idemHeader: req.headers.get('idempotency-key'), ip: addr || 'sess:' + (await sha256hex(a.sess)) }));
 }
 
 async function team(ctx, req, url) {
