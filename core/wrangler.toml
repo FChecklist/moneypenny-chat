@@ -7,6 +7,8 @@ compatibility_date = "2026-11-01"
 INSTANCES = "[]"              # JSON array of instance records (no secrets). Example in ../contract/fixtures/instance-example.json
 PAY_VIA_MONEYPENNY = "0"      # money flag: stays OFF
 
+# DEPLOY NOTE: the DB binding below is commented out on purpose. Before deploy, remove the "#", set the real database_id and apply the schema.
+# Without the DB binding the worker answers 503 (try_later) for every ticket call.
 # [[d1_databases]]  binding = "DB"  database_name = "moneypenny-chat-core"  database_id = "<set at deploy>"
 # Apply the schema:  wrangler d1 execute moneypenny-chat-core --file schema.sql
 

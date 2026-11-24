@@ -6,6 +6,7 @@ import { parseInstances, secretsFromEnv } from './instance.js';
 import { verifySignature, nonceStore } from './auth.js';
 import { verifyAssertion } from './assertion.js';
 import { makeLimiter } from './limits.js';
+import { sha256hex } from './crypto.js';
 import { d1Store } from './store-d1.js';
 import * as T from './tickets.js';
 
@@ -39,7 +40,7 @@ async function signed(ctx, req, path, number) {
   const a = await verifyAssertion(req.headers.get('x-mpc-assertion'), { secrets: ctx.secrets(id, 'assert'), product: id, roleMap: inst.role_map, now: ctx.now() });
   if (!a.ok) return fail(a.error);
   const p = parseJsonObject(raw); if (!p.ok) return fail('bad_request');
-  return out(await T.createTicket(ctx, inst, { raw, b: p.value, a, idemHeader: req.headers.get('idempotency-key'), ip: req.headers.get('x-mpc-ip') || 'x' }));
+  return out(await T.createTicket(ctx, inst, { raw, b: p.value, a, idemHeader: req.headers.get('idempotency-key'), ip: req.headers.get('x-mpc-ip') || 'sess:' + (await sha256hex(a.sess)) }));
 }
 
 async function team(ctx, req, url) {

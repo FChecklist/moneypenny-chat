@@ -8,7 +8,7 @@ test('S-011 the example record is valid', () => expect(validateInstance(good()).
 const bad = [
   ['id', { id: 'A' }], ['id', { id: undefined }], ['name', { name: '' }], ['origins empty', { allowed_origins: [] }], ['origin http', { allowed_origins: ['http://a.test'] }],
   ['origin with path', { allowed_origins: ['https://a.test/x'] }], ['retention', { retention_class: 'forever' }], ['enabled', { enabled: 'yes' }], ['routes label', { routes: { '/a': '' } }],
-  ['routes key', { routes: { 'a': 'A' } }], ['role_map', { role_map: { x: 'admin' } }], ['core_min', { core_min: 'one' }], ['tickets_per_day', { tickets_per_day: 0 }], ['brand', { brand: { primary: 'red' } }],
+  ['routes key', { routes: { 'a': 'A' } }], ['routes key digits', { routes: { '/game/123': 'A' } }], ['routes key at', { routes: { '/a@b': 'A' } }], ['role_map', { role_map: { x: 'admin' } }], ['core_min', { core_min: 'one' }], ['tickets_per_day', { tickets_per_day: 0 }], ['brand', { brand: { primary: 'red' } }],
 ];
 for (const [name, patch] of bad) test('S-011 invalid: ' + name, () => { const r = validateInstance({ ...good(), ...patch }); expect(r.ok).toBe(false); expect(r.errors.length).toBeGreaterThan(0); });
 test('S-011 not an object', () => { for (const v of [null, [], 'x', 5]) expect(validateInstance(v).ok).toBe(false); });

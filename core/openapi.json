@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Moneypenny Chat core",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "description": "Error body is always {\"error\": code, \"message\": text}. Every response has x-mpc-core-version."
   },
   "paths": {
@@ -261,6 +261,26 @@
                 }
               }
             }
+          },
+          "413": {
+            "description": "Request too large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too many requests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -334,7 +354,7 @@
     "/v1/team/tickets": {
       "get": {
         "summary": "Team list (needs team login; fails closed until the Access check exists)",
-        "x-status": "built",
+        "x-status": "closed-until-access",
         "parameters": [
           {
             "name": "product",
@@ -391,13 +411,14 @@
               }
             }
           }
-        }
+        },
+        "description": "Closed until access exists: the Cloudflare Access check is not built, so every call answers 401 (no_team_login) for now."
       }
     },
     "/v1/team/tickets/{ticket}": {
       "get": {
         "summary": "Team detail (added; product query is required)",
-        "x-status": "built",
+        "x-status": "closed-until-access",
         "parameters": [
           {
             "name": "ticket",
@@ -447,11 +468,12 @@
               }
             }
           }
-        }
+        },
+        "description": "Closed until access exists: the Cloudflare Access check is not built, so every call answers 401 (no_team_login) for now."
       },
       "patch": {
         "summary": "Team: mark seen or done, write a reply",
-        "x-status": "built",
+        "x-status": "closed-until-access",
         "parameters": [
           {
             "name": "ticket",
@@ -526,7 +548,8 @@
               }
             }
           }
-        }
+        },
+        "description": "Closed until access exists: the Cloudflare Access check is not built, so every call answers 401 (no_team_login) for now."
       }
     }
   },

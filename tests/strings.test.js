@@ -23,3 +23,8 @@ test('the contract fixtures and instance example pass the string rules', async (
   const { readdirSync, readFileSync } = await import('node:fs');
   for (const f of readdirSync(new URL('../contract/fixtures/', import.meta.url))) { const j = JSON.parse(readFileSync(new URL('../contract/fixtures/' + f, import.meta.url), 'utf8')); if (f.startsWith('instance')) expect(checkStrings(j.routes), f).toEqual([]); }
 });
+test('audit: every export of core/src/strings.js passes checkStrings, one by one', () => {
+  const names = Object.keys(S); expect(names).toEqual(expect.arrayContaining(['ERROR_TEXT', 'NOTICE', 'HOME', 'OPTIONS', 'PRIVACY', 'FALLBACK_SCREEN']));
+  for (const n of names) expect(checkStrings(S[n], n), n).toEqual([]);
+  expect(checkStrings({ ERROR_TEXT: { x: 'Check your game' } })).not.toEqual([]);
+});

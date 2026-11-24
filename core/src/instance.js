@@ -15,8 +15,8 @@ export function validateInstance(c) {
   if (!RETENTION_CLASSES.includes(c.retention_class)) errors.push('retention_class: games or records');
   if (typeof c.enabled !== 'boolean') errors.push('enabled: true or false');
   if (c.routes !== undefined) {
-    const ok = c.routes && typeof c.routes === 'object' && !Array.isArray(c.routes) && Object.entries(c.routes).every(([k, v]) => /^\/[^?#\s]*$/.test(k) && typeof v === 'string' && v.length >= 1 && v.length <= 40);
-    if (!ok) errors.push('routes: path to label (1 to 40 chars)');
+    const ok = c.routes && typeof c.routes === 'object' && !Array.isArray(c.routes) && Object.entries(c.routes).every(([k, v]) => /^\/[^?#\s]*$/.test(k) && !/[\d@]/.test(k) && typeof v === 'string' && v.length >= 1 && v.length <= 40);
+    if (!ok) errors.push('routes: path to label (1 to 40 chars); paths may not hold digits or @');
   }
   if (c.role_map !== undefined) {
     const ok = c.role_map && typeof c.role_map === 'object' && !Array.isArray(c.role_map) && Object.values(c.role_map).every((v) => ROLE_OUT.includes(v));

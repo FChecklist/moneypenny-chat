@@ -47,3 +47,12 @@ Answer: Platform secrets only. The secrets scan is first in the test chain (`bun
 ## Steps in C1 that do not apply to this repo
 - S-002 (old embed test with `C:/ct` paths), S-007 (old knowledge base answers) and S-005 (old report route): they belong to the old private chat folder and to instances. Nothing copied, so nothing to fix here.
 - S-004: `core/wrangler.toml` is written from the spec. `wrangler deploy --dry-run` was not run (no Cloudflare tooling or account here).
+
+## Deploy: the D1 binding must be filled in
+The `DB` binding in `core/wrangler.toml` is commented out and holds no database id. Fill it in before deploy and apply `core/schema.sql`. Without it the worker answers 503 (`try_later`).
+
+## Ticket numbers on a same-key race
+The D1 store allocates the number inside the same batch, after the idempotency insert. A lost race rolls the batch back, so no number is burned. The memory store behaves the same.
+
+## Missing visitor address
+If `x-mpc-ip` is missing, the rate-limit bucket is a hash of the signed session id. One bucket is never shared by all visitors.

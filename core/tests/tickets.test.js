@@ -162,6 +162,23 @@ for (const store of Object.keys(STORES)) {
     const all = await e.store.listTickets({ now: Date.now(), limit: 2 }); expect(all.items.length).toBe(2); expect(all.cursor).not.toBeNull();
     const rest = await e.store.listTickets({ now: Date.now(), limit: 2, cursor: all.cursor }); expect(rest.items.map((x) => x.number)).toEqual(['T-0001']); expect(rest.cursor).toBeNull();
   });
+  test(`[${store}] audit: screen label is scrubbed before storage`, async () => {
+    const inst = fixture('instance-example.json'); inst.routes = { ...inst.routes, '/help': 'Mail ops@example.com' };
+    const e = makeEnv({ store, instance: inst }); const t = await (await post(e, { ...fixture('ticket-help.json'), screen: '/help' })).json();
+    expect((await e.store.getTicket(inst.id, t.ticket, Date.now())).screen_label).toBe('Mail [removed]');
+  });
+  test(`[${store}] audit: a missing x-mpc-ip does not put every visitor in one bucket`, async () => {
+    const e = E(); const rs = [];
+    for (let i = 0; i < 12; i++) rs.push((await post(e, base({ text: 'Idea number ' + i + ' here' }), { sess: 'session-' + String(i).padStart(4, '0'), ip: '' })).status);
+    expect(rs.every((s) => s === 201)).toBe(true); // 12 sessions, no address: each has its own bucket (limit is 10 per bucket)
+  });
+  test(`[${store}] audit: same-key race burns no ticket number`, async () => {
+    const e = E(); const b = base({}), key = crypto.randomUUID();
+    const rs = await Promise.all(Array.from({ length: 5 }, () => post(e, b, { key })));
+    expect(new Set(await Promise.all(rs.map(async (r) => (await r.json()).ticket)))).toEqual(new Set(['T-0001']));
+    const next = await (await post(e, base({ text: 'A different idea here' }))).json();
+    expect(next.ticket).toBe('T-0002');
+  });
 }
 test('numbers repeat per instance (T-0001 in both) and one instance cannot read the other', async () => {
   const { memoryStore } = await import('../src/store-memory.js'); const s = memoryStore(); const mk = (n) => (num) => ({ row: { number: num, erase_at: 9e15, token_hash: 'h' + n, status: 'new' }, response: { ticket: num } });
@@ -171,4 +188,15 @@ test('numbers repeat per instance (T-0001 in both) and one instance cannot read 
 test('a ticket proof signed for one product cannot be used for another product call', async () => {
   const e = makeEnv(); const tok = await signAssertion(ASSERT, { product: 'someone-else', role: 'organizer', sess: 'session-0001', exp: Math.floor(Date.now() / 1000) + 60 });
   expect((await e.call('POST', '/v1/tickets', fixture('ticket-suggest.json'), { assertion: tok })).status).toBe(401);
+});
+
+test('audit: d1 store, a request that lost the same-key race burns no number (first peek is forced to miss)', async () => {
+  const { fakeD1 } = await import('./helpers.js'); const { d1Store } = await import('../src/store-d1.js');
+  const db = fakeD1(); let blind = 0;
+  const wrapped = { ...db, prepare: (sql) => { const st = db.prepare(sql); if (!/FROM idempotency WHERE instance=\? AND key_hash=\? AND expires>\?/.test(sql)) return st; const first = st.first; st.first = async () => (blind-- > 0 ? null : first()); return st; } };
+  const st = d1Store(wrapped), id = { keyHash: 'k1', bodyHash: 'b1' }, mk = (n) => ({ row: { number: n, option: 'help_more', screen: '/', screen_label: 'x', text: '', role: 'organizer', status: 'new', team_note: '', created: 1, updated: 1, erase_at: 9e12, token_hash: 'h' }, response: { ticket: n } });
+  expect((await st.createTicket('p', id, mk, 1)).response).toEqual({ ticket: 'T-0001' });
+  blind = 1; const lost = await st.createTicket('p', id, mk, 1);
+  expect(lost.status).toBe('replay'); expect(lost.response).toEqual({ ticket: 'T-0001' });
+  expect((await st.createTicket('p', { keyHash: 'k2', bodyHash: 'b2' }, mk, 1)).response).toEqual({ ticket: 'T-0002' });
 });

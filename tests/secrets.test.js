@@ -22,3 +22,14 @@ test('S-003 the scan is first in the test script', async () => {
   expect(p.scripts.test.startsWith('bun scripts/secrets-scan.mjs && ')).toBe(true);
 });
 test('only the sample files are exempt', () => expect([...EXEMPT].sort()).toEqual(['core/tests/scrub.test.js', 'core/tests/tickets.test.js', 'tests/history.test.js', 'tests/secrets.test.js']));
+test('audit: the secrets scan CLI exits with failure on a planted fake key', () => {
+  const { spawnSync } = require('node:child_process');
+  const d = mkdtempSync(join(tmpdir(), 'scancli-'));
+  try {
+    writeFileSync(join(d, 'a.js'), 'const k = "' + 'sk-ant-' + 'abcdefghij' + '";');
+    const r = spawnSync('bun', [join(here, 'scripts/secrets-scan.mjs'), d], { encoding: 'utf8' });
+    expect(r.status).toBe(1); expect(r.stdout).toContain('RESULT: FAIL');
+    writeFileSync(join(d, 'a.js'), 'const k = 1;');
+    expect(spawnSync('bun', [join(here, 'scripts/secrets-scan.mjs'), d], { encoding: 'utf8' }).status).toBe(0);
+  } finally { rmSync(d, { recursive: true }); }
+});

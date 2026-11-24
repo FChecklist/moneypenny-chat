@@ -18,3 +18,12 @@ test('S-008 a key added and then removed is still found in history; so is an e-m
     const kinds = historyScan(d).map((h) => h.kind).sort(); expect(kinds).toEqual(['anthropic key', 'e-mail address']);
   } finally { rmSync(d, { recursive: true }); }
 });
+test('audit: the history scan CLI exits with failure on a planted fake key', () => {
+  const d = mkdtempSync(join(tmpdir(), 'histcli-'));
+  try {
+    git(d, 'init', '-q'); writeFileSync(join(d, 'a.txt'), 'key ' + 'sk-ant-' + 'abcdefghij'); git(d, 'add', '.'); git(d, 'commit', '-qm', 'add');
+    const script = join(import.meta.dir, '../scripts/history-scan.mjs');
+    const r = spawnSync('bun', [script, d], { encoding: 'utf8' });
+    expect(r.status).toBe(1); expect(r.stdout).toContain('RESULT: FAIL');
+  } finally { rmSync(d, { recursive: true }); }
+});

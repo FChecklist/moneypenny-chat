@@ -10,7 +10,7 @@
     "allowed_origins": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^https://[^/?#]+$" } },
     "retention_class": { "enum": ["games", "records"] },
     "enabled": { "type": "boolean" },
-    "routes": { "type": "object", "propertyNames": { "pattern": "^/[^?#\\s]*$" }, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 40 } },
+    "routes": { "type": "object", "propertyNames": { "pattern": "^/[^?#\\s\\d@]*$" }, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 40 } },
     "role_map": { "type": "object", "additionalProperties": { "enum": ["organizer", "co-organizer"] } },
     "core_min": { "type": "string", "pattern": "^\\d+\\.\\d+$" },
     "core_max": { "type": "string", "pattern": "^\\d+\\.(\\d+|x)$" },

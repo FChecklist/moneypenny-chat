@@ -73,7 +73,7 @@ export async function createTicket(ctx, inst, { raw, b, a, idemHeader, ip }) {
   if (!lim.ok) return { error: 'rate', extra: { retry_after: lim.retryAfter }, headers: { 'retry-after': String(lim.retryAfter) } };
   const token = randomToken(32), tokenHash = await sha256hex(token), erase = eraseAtCreate(inst.retention_class, now);
   const res = await ctx.store.createTicket(inst.id, id, (number) => ({
-    row: { number, option: t.option, type: t.type, topic: t.topic, screen: t.screen, screen_label: t.label, text: scrub(t.text), screenshot_id: null, role: t.role, client_class: t.client.class, client_w: t.client.w, status: 'new', team_note: '', created: now, updated: now, done_at: null, erase_at: erase, token_hash: tokenHash },
+    row: { number, option: t.option, type: t.type, topic: t.topic, screen: scrub(t.screen), screen_label: scrub(t.label), text: scrub(t.text), screenshot_id: null, role: t.role, client_class: t.client.class, client_w: t.client.w, status: 'new', team_note: '', created: now, updated: now, done_at: null, erase_at: erase, token_hash: tokenHash },
     response: { ticket: number, status_token: token, erase_at: iso(erase) },
   }), now);
   if (res.status !== 'created') await give(ctx, lim.taken); // lost a race with the same key

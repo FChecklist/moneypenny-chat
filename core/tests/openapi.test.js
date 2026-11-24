@@ -17,3 +17,7 @@ test('S-010 every declared error status of a built route is a status the core ca
   const codes = new Set(Object.values(STATUS).map(String));
   for (const p of ['/v1/tickets', '/v1/tickets/{ticket}', '/v1/team/tickets']) for (const op of Object.values(openapi.paths[p])) for (const s of Object.keys(op.responses)) if (+s >= 400) expect(codes.has(s), p + s).toBe(true);
 });
+test('audit: team routes are closed-until-access and say so; ticket read declares 413 and 429', () => {
+  for (const p of ['/v1/team/tickets', '/v1/team/tickets/{ticket}']) for (const op of Object.values(openapi.paths[p])) { expect(op['x-status']).toBe('closed-until-access'); expect(op.description).toMatch(/closed until access/i); }
+  const r = openapi.paths['/v1/tickets/{ticket}'].get.responses; expect(r['413']).toBeDefined(); expect(r['429']).toBeDefined();
+});

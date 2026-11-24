@@ -9,7 +9,12 @@ const table = [
   ['card 4111 1111 1111 1111 ok', `card ${R} ok`], ['4111-1111-1111-1111', R], ['4111111111111111', R], ['amex 3782 822463 10005', `amex ${R}`], ['card 5555555555554444.', `card ${R}.`], ['1234567812345678', R],
   ['Players 25 and prizes 3', 'Players 25 and prizes 3'], ['Ticket T-0457 failed', 'Ticket T-0457 failed'], ['price 1,00,000 rupees', 'price 1,00,000 rupees'], ['on 2026-11-24 it broke', 'on 2026-11-24 it broke'],
   ['room 1234567', 'room 1234567'], ['version 1.2.3', 'version 1.2.3'], ['', ''], ['no data here', 'no data here'], ['two: 9876543210 and 8123456789', `two: ${R} and ${R}`],
-  ['id12345678901', 'id12345678901'], ['line one\n9876543210\nline three', `line one\n${R}\nline three`], ['at 10:30, 11:45', 'at 10:30, 11:45'], ['5 of 600', '5 of 600'],
+  ['id12345678901', `id${R}`], ['line one\n9876543210\nline three', `line one\n${R}\nline three`], ['at 10:30, 11:45', 'at 10:30, 11:45'], ['5 of 600', '5 of 600'],
 ];
 test('S-020 table of ' + table.length + ' samples', () => { expect(table.length).toBeGreaterThanOrEqual(30); for (const [i, o] of table) expect(scrub(i), i).toBe(o); });
 test('S-020 non-string input does not throw', () => { expect(scrub(null)).toBe('null'); expect(scrub(12)).toBe('12'); });
+test('S-020 numbers glued to letters or signs are removed; dates and short numbers stay', () => {
+  expect(scrub('card:4111111111111111x')).toBe(`card:${R}x`); expect(scrub('tel9876543210')).toBe(`tel${R}`);
+  expect(scrub('a9876543210b')).toBe(`a${R}b`); expect(scrub('x4111 1111 1111 1111y')).toBe(`x${R}y`);
+  for (const ok of ['on 2026-11-24 ok', 'room 1234567', 'T-0457', 'v1.2.3', '12 players']) expect(scrub(ok)).toBe(ok);
+});

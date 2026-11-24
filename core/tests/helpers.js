@@ -27,9 +27,9 @@ export function fakeD1() {
     first: async () => db.query(sql).get(...args) ?? null,
     all: async () => ({ results: db.query(sql).all(...args) }),
     run: async () => ({ meta: { changes: db.query(sql).run(...args).changes } }),
-    _run: () => db.query(sql).run(...args),
+    _run: () => db.query(sql).all(...args),
   }; return o; };
-  return { prepare: prep, batch: async (list) => { db.exec('BEGIN'); try { for (const s of list) s._run(); db.exec('COMMIT'); } catch (e) { db.exec('ROLLBACK'); throw e; } }, raw: db };
+  return { prepare: prep, batch: async (list) => { db.exec('BEGIN'); try { const out = []; for (const s of list) out.push({ results: s._run() }); db.exec('COMMIT'); return out; } catch (e) { db.exec('ROLLBACK'); throw e; } }, raw: db };
 }
 
 export const STORES = { memory: () => memoryStore(), d1: () => d1Store(fakeD1()) };
