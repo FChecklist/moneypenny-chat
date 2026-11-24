@@ -43,7 +43,7 @@ export function makeEnv({ store = 'memory', instance = fixture('instance-example
   async function call(method, path, body, o = {}) {
     const raw = o.rawBody ?? (body === undefined ? '' : JSON.stringify(body));
     const ts = String(o.ts ?? Math.floor(now() / 1000)), nonce = o.nonce ?? hex(), id = o.instance ?? instance.id;
-    const sig = await sign(o.secret ?? SECRET, { method, path, ts, nonce, body: o.signedBody ?? raw });
+    const sig = await sign(o.secret ?? SECRET, { method, path, ts, nonce, body: o.signedBody ?? raw, ip: o.signedIp ?? o.ip ?? '1.2.3.4' });
     const h = { 'x-mpc-instance': id, 'x-mpc-ts': ts, 'x-mpc-nonce': nonce, 'x-mpc-sig': sig, 'x-mpc-ip': o.ip ?? '1.2.3.4' };
     if (method === 'POST') h['idempotency-key'] = o.key ?? crypto.randomUUID();
     if (o.token) h['x-mpc-status-token'] = o.token;

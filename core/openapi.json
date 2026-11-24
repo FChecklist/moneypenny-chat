@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Moneypenny Chat core",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Error body is always {\"error\": code, \"message\": text}. Every response has x-mpc-core-version."
   },
   "paths": {
@@ -559,7 +559,7 @@
         "type": "apiKey",
         "in": "header",
         "name": "x-mpc-sig",
-        "description": "HMAC-SHA256(secret, method + \"\\n\" + path + \"\\n\" + ts + \"\\n\" + nonce + \"\\n\" + sha256(body)); time gap at most 300 s; nonce used once"
+        "description": "HMAC-SHA256(secret, method + \"\\n\" + path + \"\\n\" + ts + \"\\n\" + nonce + \"\\n\" + sha256(body) [+ \"\\n\" + x-mpc-ip when that header is sent]); time gap at most 300 s; nonce used once"
       }
     },
     "parameters": {

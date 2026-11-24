@@ -200,3 +200,30 @@ test('audit: d1 store, a request that lost the same-key race burns no number (fi
   expect(lost.status).toBe('replay'); expect(lost.response).toEqual({ ticket: 'T-0001' });
   expect((await st.createTicket('p', { keyHash: 'k2', bodyHash: 'b2' }, mk, 1)).response).toEqual({ ticket: 'T-0002' });
 });
+
+// Round 2
+test('round2: neither store holds the raw status token; a replay still returns it', async () => {
+  for (const store of Object.keys(STORES)) {
+    const e = makeEnv({ store }), key = crypto.randomUUID();
+    const a = await (await e.call('POST', '/v1/tickets', fixture('ticket-help.json'), { key })).json();
+    const r = await e.call('POST', '/v1/tickets', fixture('ticket-help.json'), { key });
+    expect(r.headers.get('idempotent-replay')).toBe('true'); expect((await r.json()).status_token).toBe(a.status_token);
+    expect(a.status_token.length).toBeGreaterThan(20);
+    const { keyHash } = await import('../src/idem.js'), rec = await e.store.peekIdem(e.instance.id, await keyHash(e.instance.id, key), Date.now()), stored = rec.response;
+    expect(stored).not.toContain(a.status_token); expect(stored).toContain('T-0001');
+  }
+});
+test('round2: x-mpc-ip changed after signing fails with bad_signature; unsigned-absent header still works', async () => {
+  const e = makeEnv();
+  const bad = await e.call('POST', '/v1/tickets', fixture('ticket-help.json'), { ip: '9.9.9.9', signedIp: '1.2.3.4' });
+  expect(bad.status).toBe(401); expect((await bad.json()).error).toBe('bad_signature');
+  expect((await e.call('POST', '/v1/tickets', fixture('ticket-help.json'), { ip: '9.9.9.9' })).status).toBe(201);
+});
+test('round2: d1 createTicket placeholder order gives T-0001 then T-0002, and a replay returns the first', async () => {
+  const { fakeD1 } = await import('./helpers.js'); const { d1Store } = await import('../src/store-d1.js');
+  const st = d1Store(fakeD1()), mk = (n) => ({ row: { number: n, option: 'help_more', screen: '/', screen_label: 'x', text: '', role: 'organizer', status: 'new', team_note: '', created: 1, updated: 1, erase_at: 9e12, token_hash: 'h' }, response: { ticket: n } });
+  expect((await st.createTicket('p', { keyHash: 'k1', bodyHash: 'b' }, mk, 1)).response).toEqual({ ticket: 'T-0001' });
+  expect((await st.createTicket('p', { keyHash: 'k2', bodyHash: 'b' }, mk, 1)).response).toEqual({ ticket: 'T-0002' });
+  const again = await st.createTicket('p', { keyHash: 'k1', bodyHash: 'b' }, mk, 1);
+  expect(again.status).toBe('replay'); expect(again.response).toEqual({ ticket: 'T-0001' });
+});

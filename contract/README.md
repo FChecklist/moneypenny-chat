@@ -9,4 +9,4 @@ What an instance and the core agree on. The core publishes these; every instance
 
 Calls from an instance to the core are signed: headers `x-mpc-instance`, `x-mpc-ts`, `x-mpc-nonce`, `x-mpc-sig`.
 Ticket creation also needs `x-mpc-assertion` (role proof from the product) and `idempotency-key` (a UUID).
-`x-mpc-ip` is optional: the instance may pass the visitor address so the core can count per address (hashed, rotates daily, never stored).
+`x-mpc-ip` is optional: the instance may pass the visitor address so the core can count per address (hashed, rotates daily, never stored). When the header is sent, the address is added to the signed text as a last line (`method \n path \n ts \n nonce \n sha256(body) \n ip`). If it is changed after signing, the call fails with `bad_signature`. When the header is not sent, the signed text has five lines.

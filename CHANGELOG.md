@@ -1,5 +1,11 @@
 # Moneypenny Chat changelog
 
+## 0.1.2 - 25 Nov 2026 - round 2 fixes from two audits
+- Idempotency: the status token in the stored answer is now encrypted (AES-GCM, key from the instance secret). The raw token is never stored. Replays decrypt it.
+- Signature: `x-mpc-ip` is part of the signed text when the header is sent. A changed address fails with `bad_signature`.
+- Docs: known limits noted in DECISIONS; contract README and OpenAPI updated.
+- Tests: raw token not found in either store; changed address refused; D1 number order and replay.
+
 ## 0.1.1 - 25 Nov 2026 - fixes from two audits of C1 to C3
 - Scrub: any run of 8 or more digits is removed, even when glued to letters or signs (a card or phone number glued to letters). Dates and short numbers stay.
 - Tickets: screen and screen label are scrubbed too. An instance route may not hold digits or `@`.

@@ -1,5 +1,5 @@
 // C3: tickets. Create (S-021), idempotency (S-022), limits (S-023), read with status token (S-024), erase_at (S-025); team list and close.
-import { randomToken, sha256hex, timingEqual } from './crypto.js';
+import { randomToken, sha256hex, timingEqual, encryptText, decryptText } from './crypto.js';
 import { parseKey, keyHash, bodyHash } from './idem.js';
 import { cleanPath, segmentsFromRoutes, screenLabel } from './path.js';
 import { scrub } from './scrub.js';
@@ -59,6 +59,13 @@ async function takeLimits(ctx, inst, sess, ip, now) {
 }
 const give = (ctx, keys) => Promise.all(keys.map((key) => ctx.limiter(key, { op: 'add', delta: -1 })));
 
+// Turn a stored response back into the one the visitor gets: decrypt the token. If no secret fits, the status token is lost: fail closed.
+async function open(ctx, inst, r) {
+  const t = await decryptText(ctx.secrets(inst.id, 'sign'), r.status_token);
+  if (t === null) throw new Error('idempotency response cannot be opened');
+  return { ...r, status_token: t };
+}
+
 // Returns {status, body, headers}. `raw` is the body text (hashed for idempotency); `b` the parsed object; `a` the verified assertion.
 export async function createTicket(ctx, inst, { raw, b, a, idemHeader, ip }) {
   const now = ctx.now(), key = parseKey(idemHeader);
@@ -68,17 +75,18 @@ export async function createTicket(ctx, inst, { raw, b, a, idemHeader, ip }) {
   if (v.value.role !== a.role) return { error: 'role' }; // the body may not claim more than the proof says
   const t = v.value, id = { keyHash: await keyHash(inst.id, key), bodyHash: await bodyHash(raw) };
   const hit = await ctx.store.peekIdem(inst.id, id.keyHash, now); // a replay takes no limit
-  if (hit) return hit.bodyHash === id.bodyHash ? { status: 201, body: JSON.parse(hit.response), headers: { 'idempotent-replay': 'true' } } : { error: 'idempotency_conflict' };
+  if (hit) return hit.bodyHash === id.bodyHash ? { status: 201, body: await open(ctx, inst, JSON.parse(hit.response)), headers: { 'idempotent-replay': 'true' } } : { error: 'idempotency_conflict' };
   const lim = await takeLimits(ctx, inst, a.sess, ip, now);
   if (!lim.ok) return { error: 'rate', extra: { retry_after: lim.retryAfter }, headers: { 'retry-after': String(lim.retryAfter) } };
   const token = randomToken(32), tokenHash = await sha256hex(token), erase = eraseAtCreate(inst.retention_class, now);
+  const sealed = await encryptText(ctx.secrets(inst.id, 'sign')[0], token);
   const res = await ctx.store.createTicket(inst.id, id, (number) => ({
     row: { number, option: t.option, type: t.type, topic: t.topic, screen: scrub(t.screen), screen_label: scrub(t.label), text: scrub(t.text), screenshot_id: null, role: t.role, client_class: t.client.class, client_w: t.client.w, status: 'new', team_note: '', created: now, updated: now, done_at: null, erase_at: erase, token_hash: tokenHash },
-    response: { ticket: number, status_token: token, erase_at: iso(erase) },
+    response: { ticket: number, status_token: sealed, erase_at: iso(erase) }, // the stored copy holds the token only encrypted
   }), now);
   if (res.status !== 'created') await give(ctx, lim.taken); // lost a race with the same key
   if (res.status === 'conflict') return { error: 'idempotency_conflict' };
-  return { status: 201, body: res.response, headers: res.status === 'replay' ? { 'idempotent-replay': 'true' } : {} };
+  return { status: 201, body: await open(ctx, inst, res.response), headers: res.status === 'replay' ? { 'idempotent-replay': 'true' } : {} };
 }
 
 // S-024: wrong token and unknown ticket look the same (404).

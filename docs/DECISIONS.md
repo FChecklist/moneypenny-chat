@@ -54,5 +54,17 @@ The `DB` binding in `core/wrangler.toml` is commented out and holds no database 
 ## Ticket numbers on a same-key race
 The D1 store allocates the number inside the same batch, after the idempotency insert. A lost race rolls the batch back, so no number is burned. The memory store behaves the same.
 
+## Stored idempotency answer
+The idempotency row keeps the first answer for 24 hours (`expires`). The status token inside it is stored only encrypted (AES-GCM, key derived from the instance signing secret) and is decrypted on a replay. The raw token is never stored; the ticket row keeps only its sha256. If the secret is changed so that no active secret fits, a replay fails with `try_later` (fail closed). Old rows are ignored after `expires`; an erase job that deletes them is not built yet.
+
+## Visitor address is signed
+`x-mpc-ip` is part of the signed text when it is sent, so it cannot be changed after signing.
+
+## Accepted known limits (v0.1.2)
+- One global Durable Object serialises the counters for all instances; shard it by instance later.
+- Digit runs split by letters (for example `1234abcd5678`) are not scrubbed.
+- Team listing across instances needs a per-product rule when Cloudflare Access is built.
+- `topic` is stored unscrubbed on purpose: it is limited to `[a-z0-9-]{1,40}`, so it cannot hold free text. Not a defect.
+
 ## Missing visitor address
 If `x-mpc-ip` is missing, the rate-limit bucket is a hash of the signed session id. One bucket is never shared by all visitors.
