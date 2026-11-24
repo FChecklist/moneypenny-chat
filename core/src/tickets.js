@@ -5,6 +5,9 @@ import { cleanPath, segmentsFromRoutes, screenLabel } from './path.js';
 import { scrub } from './scrub.js';
 import { eraseAtCreate, eraseAtDone } from './retention.js';
 import { FALLBACK_SCREEN } from './strings.js';
+import { SHOT_ID } from './shots.js';
+import { audit } from './audit.js';
+import { eraseTicketNow, shotEraseAt } from './retention.js';
 
 export const OPTIONS = ['help_more', 'suggest', 'stuck'];
 export const TYPES = ['option', 'feature', 'wording'];
@@ -31,7 +34,8 @@ export function validateTicket(b, inst) {
   if (b.option === 'stuck' && topic === null && n === 0) return bad('text');
   if (b.screen !== undefined && (typeof b.screen !== 'string' || b.screen.length > 200)) return bad('screen');
   if (b.screen_label !== undefined && (typeof b.screen_label !== 'string' || b.screen_label.length > 60)) return bad('screen_label');
-  if (b.screenshot_id !== undefined && b.screenshot_id !== null) return bad('screenshot_id'); // screenshots arrive in a later version
+  const shot = b.screenshot_id ?? null;
+  if (shot !== null && !(typeof shot === 'string' && SHOT_ID.test(shot))) return bad('screenshot_id');
   if (b.role !== 'organizer' && b.role !== 'co-organizer') return bad('role');
   let client = { class: null, w: null };
   if (b.client !== undefined) {
@@ -40,7 +44,7 @@ export function validateTicket(b, inst) {
     client = { class: c.ua_class, w: c.w };
   }
   const allowed = segmentsFromRoutes(inst.routes), screen = cleanPath(b.screen || '/', allowed);
-  return { ok: true, value: { option: b.option, type, topic, text, screen, label: screenLabel(screen, inst.routes, allowed) || FALLBACK_SCREEN, role: b.role, client } };
+  return { ok: true, value: { shot, option: b.option, type, topic, text, screen, label: screenLabel(screen, inst.routes, allowed) || FALLBACK_SCREEN, role: b.role, client } };
 }
 
 // F4 counters. Order: session, address, instance. A refused call gives back what it took; so does a replay.
@@ -79,13 +83,22 @@ export async function createTicket(ctx, inst, { raw, b, a, idemHeader, ip }) {
   const lim = await takeLimits(ctx, inst, a.sess, ip, now);
   if (!lim.ok) return { error: 'rate', extra: { retry_after: lim.retryAfter }, headers: { 'retry-after': String(lim.retryAfter) } };
   const token = randomToken(32), tokenHash = await sha256hex(token), erase = eraseAtCreate(inst.retention_class, now);
+  let claimed = false; // C4: take the screenshot for this ticket first, so two tickets can never share one file
+  if (t.shot) {
+    try { claimed = await ctx.store.claimShot(inst.id, t.shot, now); } catch (e) { await give(ctx, lim.taken).catch(() => {}); throw e; }
+    if (!claimed) { await give(ctx, lim.taken); return { error: 'bad_request', extra: { field: 'screenshot_id' } }; }
+  }
   const sealed = await encryptText(ctx.secrets(inst.id, 'sign')[0], token);
   let res;
   try { res = await ctx.store.createTicket(inst.id, id, (number) => ({
-    row: { number, option: t.option, type: t.type, topic: t.topic, screen: scrub(t.screen), screen_label: scrub(t.label), text: scrub(t.text), screenshot_id: null, role: t.role, client_class: t.client.class, client_w: t.client.w, status: 'new', team_note: '', created: now, updated: now, done_at: null, erase_at: erase, token_hash: tokenHash },
+    row: { number, option: t.option, type: t.type, topic: t.topic, screen: scrub(t.screen), screen_label: scrub(t.label), text: scrub(t.text), screenshot_id: t.shot, role: t.role, client_class: t.client.class, client_w: t.client.w, status: 'new', team_note: '', created: now, updated: now, done_at: null, erase_at: erase, token_hash: tokenHash },
     response: { ticket: number, status_token: sealed, erase_at: iso(erase) }, // the stored copy holds the token only encrypted
-  }), now); } catch (e) { await give(ctx, lim.taken).catch(() => {}); throw e; } // a throw gives the counters back
-  if (res.status !== 'created') await give(ctx, lim.taken); // lost a race with the same key
+  }), now); } catch (e) { await give(ctx, lim.taken).catch(() => {}); if (claimed) await ctx.store.releaseShot(inst.id, t.shot).catch(() => {}); throw e; } // a throw gives the counters back
+  if (res.status !== 'created') { await give(ctx, lim.taken); if (claimed) await ctx.store.releaseShot(inst.id, t.shot); } // lost a race with the same key
+  else {
+    if (claimed) { await ctx.store.attachShot(inst.id, t.shot, res.response.ticket, shotEraseAt(inst.retention_class, now, null)); await audit(ctx, inst.id, res.response.ticket, 'screenshot_attached', 'organizer'); }
+    await audit(ctx, inst.id, res.response.ticket, 'ticket_created', 'organizer');
+  }
   if (res.status === 'conflict') return { error: 'idempotency_conflict' };
   return { status: 201, body: await open(ctx, inst, res.response), headers: res.status === 'replay' ? { 'idempotent-replay': 'true' } : {} };
 }
@@ -111,6 +124,11 @@ export async function teamRead(ctx, product, number) {
 }
 // Close or mark seen. `done` recomputes erase_at by the retention class.
 export async function teamUpdate(ctx, inst, number, b) {
+  if (b.erase === true) { // Erase now: the only field allowed with it is erase itself
+    if (Object.keys(b).length !== 1) return { error: 'bad_request', extra: { field: 'erase' } };
+    return (await eraseTicketNow(ctx, inst.id, number, 'team')) ? { status: 200, body: { ticket: number, erased: true } } : { error: 'not_found' };
+  }
+  if (b.erase !== undefined) return { error: 'bad_request', extra: { field: 'erase' } };
   if (!['seen', 'done'].includes(b.status)) return { error: 'bad_request', extra: { field: 'status' } };
   if (b.team_note !== undefined && (typeof b.team_note !== 'string' || len(clean(b.team_note)) > 500)) return { error: 'bad_request', extra: { field: 'team_note' } };
   const now = ctx.now(), cur = await ctx.store.getTicket(inst.id, number, now); if (!cur) return { error: 'not_found' };
@@ -119,5 +137,10 @@ export async function teamUpdate(ctx, inst, number, b) {
   if (b.status === 'done') { patch.done_at = cur.done_at ?? now; patch.erase_at = eraseAtDone(inst.retention_class, cur.created, patch.done_at); }
   else if (cur.done_at != null) { patch.done_at = null; patch.erase_at = eraseAtCreate(inst.retention_class, cur.created); } // re-opened: back to the receipt-based window
   const r = await ctx.store.updateTicket(inst.id, number, patch, now);
+  if (r) {
+    if (b.status === 'done') await ctx.store.setShotErase(inst.id, number, shotEraseAt(inst.retention_class, cur.created, patch.done_at));
+    else if (cur.done_at != null) await ctx.store.setShotErase(inst.id, number, shotEraseAt(inst.retention_class, cur.created, null));
+    await audit(ctx, inst.id, number, 'team_' + b.status, 'team');
+  }
   return r ? { status: 200, body: item(r) } : { error: 'not_found' };
 }

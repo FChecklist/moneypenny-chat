@@ -1,5 +1,17 @@
 # Moneypenny Chat core changelog
 
+## 0.2.0 - 25 Nov 2026 - C4 to C6: screenshots, team e-mail and login, AI links
+- Screenshots (S-026 to S-033): `POST /v1/screenshots` (png, jpeg, webp; first bytes must match; up to 2 MB; 10 per hour per address). Files go to the private bucket `mpc-shots` under `<instance>/<random id>`. One file per ticket. A file no ticket uses is erased after 1 hour. A ticket may carry `screenshot_id`. Team can read the file of one ticket (login only). No public URL.
+- Erase (S-030): hourly sweep (cron) erases due files and tickets with their notes, call log and mail queue; `erasure_log` keeps only ticket, instance and time. Team can use Erase now (`PATCH` with `{"erase":true}`).
+- Audit: every state change writes a row in the new `audit` table (time, instance, ticket, action, who). No text, no person.
+- Privacy (S-031, S-032): with `DNT: 1` or `Sec-GPC: 1` the core writes no AI call-log row. Tests check that no response sets a cookie and no stored row holds an address, user agent or key.
+- Team e-mail (S-034 to S-037): one mail per new ticket to the `TEAM_EMAIL` secret address. Only number, product, option, topic, screen, time and a link. Sender port with a fake for tests and a service-binding sender. A failed mail is tried 3 more times, then queued; the hourly sweep tries up to 5 more times.
+- Team list (S-038 to S-041): `/team` page (plain HTML, one same-origin script, strict CSP); team routes now check the Cloudflare Access token (`ACCESS_TEAM_DOMAIN`, `ACCESS_AUD`). See `docs/ACCESS.md`.
+- AI links (S-042 to S-050): `POST /v1/ai-links`, `DELETE /v1/ai-links/{id}`, `POST /v1/ai-links/{id}/approve` (added), `GET /ai/{id}` and `/ai/{id}.json`, `GET /v1/ai/context`, `POST /v1/ai/notes`. Fixed scope list. Only the hash of the key is stored. A ticket can only be linked with its own status token (added).
+- Fix: a `204` answer now has no body.
+- Instance record: new optional `ai_calls` (up to 20 lines shown on the AI page).
+- Tests: new files for each step; the standard line test checks the owner line byte for byte.
+
 ## 0.1.4 - 25 Nov 2026 - round 4 fixes
 - Rate limit: the Durable Object keeps at most 5,000 live nonces. More signed requests are refused with `rate` (429) until old nonces expire (10 minutes).
 - Tickets: re-opening a ticket after done clears `done_at` and sets `erase_at` back to the receipt-based time.

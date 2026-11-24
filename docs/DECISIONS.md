@@ -92,3 +92,22 @@ Setting a done ticket back to `seen` clears `done_at` and sets `erase_at` to the
 - Team routes fail closed until the Access check exists.
 - A sealed status token cannot contain the placeholder text.
 - Batch order in the D1 store is covered by the fake D1 tests.
+
+## C4 to C6 notes (version 0.2.0)
+Built in this run: screenshots (S-026 to S-033), team e-mail and list (S-034 to S-041), AI links (S-042 to S-050). Not confirmed by the owner. Accepted limits and choices:
+- **No per-ticket alarm.** The spec asks for a per-ticket Durable Object alarm and a nightly sweep. Built: reads already hide a ticket and its file once `erase_at` has passed, and an hourly sweep (cron `17 * * * *`) deletes the data. So data can stay in storage up to about one hour after `erase_at` but cannot be read. The per-ticket alarm is not built.
+- **Sweep and bucket.** The sweep deletes the file first, then the rows. If the bucket is down, the ticket stays and the next sweep tries again.
+- **Parallel uploads with one key** may store two files. The extra one is erased after 1 hour.
+- **Team mail service contract is unverified.** The sender posts `{to, subject, text}` as JSON to `https://mail.internal/send` through a service binding named `MAIL`. The real platform mail service was not checked. The binding is commented out in `wrangler.toml`. A staging send must be checked by the owner. The address is only the `TEAM_EMAIL` secret.
+- **Mail retry.** First try plus 3 immediate retries. Then queued. The hourly sweep tries again, up to 5 times, then writes `mail_gave_up`. No mail is sent when the address, the sender or `TEAM_URL` is not set; the ticket is never blocked by mail.
+- **Access login** is tested with a locally made key pair only. Not tried on a real Cloudflare Access application. The routes answer 401 until `ACCESS_TEAM_DOMAIN` and `ACCESS_AUD` are set. See `docs/ACCESS.md`. The team page was not opened in a browser and no accessibility tool was run; only static checks on the HTML were made.
+- **Team code stays in `tickets.js`.** The spec names `core/src/team.js`; the team list and update logic was built in C3 and was not moved.
+- **AI link host.** The link uses the first entry of `allowed_origins` of the instance. If the chat page origin and the AI page origin differ, a separate setting is needed.
+- **Added to the spec:** `POST /v1/ai-links/{id}/approve` (without it `approved:true` could never happen); a named ticket needs its status token when a link is made (ticket numbers are in order and must not be enough to read another organizer's ticket); `GET /v1/team/tickets/{ticket}/screenshot`; `ai_calls` in the instance record.
+- **AI note rules are a first filter, not the lock.** Notes with words about paying, credits, passwords or deleting (plan and step notes) get `forbidden_action`; links to other sites and long token-like strings get `bad_note`. A person can word a request in another way. The real block is in the product backend (spec E3).
+- **Note limits.** 20 notes per link in total and 1 per second. The 21st note gets `slow_down` with `retry_after` set to the seconds left on the link, because E6 has no other code for it. A note of type `done` or `blocked` closes the link; later calls get `expired`.
+- **Step and done notes need an approved plan** only when the link has a write scope (`edit_event`, `create_event`, `invite`). Links with read scopes only may continue without approval.
+- **Sign-out revoke** (spec E2) belongs to the instance and is not built here. The organizer can already stop a link with `DELETE`.
+- **Product calls on the AI page** come from the optional `ai_calls` list in the instance record. They are not checked against any real product API. The page names no payee. Payments are only by a person, through Moneypenny credits; a payee name must come from the payee record when a payment screen is built.
+- **DNT and GPC.** The instance must forward both headers. Rate-limit counters (hashed address, rotated daily) and audit rows are not side records.
+- **`wrangler` text imports.** `team/*.html`, `team/app.js` and `templates/ai-page.md` are imported as text with `with { type: 'text' }` and a `[[rules]]` entry. Tests run in bun. The bundling by wrangler was not run here.

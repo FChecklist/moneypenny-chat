@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Moneypenny Chat core",
-    "version": "0.1.4",
+    "version": "0.2.0",
     "description": "Error body is always {\"error\": code, \"message\": text}. Every response has x-mpc-core-version."
   },
   "paths": {
@@ -175,11 +175,163 @@
     },
     "/v1/screenshots": {
       "post": {
-        "summary": "Upload a screenshot",
-        "x-status": "planned",
+        "summary": "Upload a screenshot (png, jpeg or webp, up to 2 MB). Held 1 hour unless a ticket uses it.",
+        "x-status": "built",
+        "security": [
+          {
+            "signature": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/instance"
+          },
+          {
+            "$ref": "#/components/parameters/ts"
+          },
+          {
+            "$ref": "#/components/parameters/nonce"
+          },
+          {
+            "$ref": "#/components/parameters/sig"
+          },
+          {
+            "$ref": "#/components/parameters/assertion"
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/png": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/jpeg": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            },
+            "image/webp": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        },
         "responses": {
-          "501": {
-            "description": "Not built in 0.1.0"
+          "201": {
+            "description": "Stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "screenshot_id": {
+                      "type": "string"
+                    },
+                    "bytes": {
+                      "type": "integer"
+                    },
+                    "expires": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "bad_signature or no_assertion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate; header retry-after",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "try_later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency_conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "415": {
+            "description": "bad_type: type or first bytes not accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
@@ -287,66 +439,550 @@
     },
     "/v1/ai-links": {
       "post": {
-        "summary": "Create an AI link",
-        "x-status": "planned",
+        "summary": "Create an AI link. Scopes come from a fixed list. A named ticket needs its x-mpc-status-token (added).",
+        "x-status": "built",
+        "security": [
+          {
+            "signature": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/instance"
+          },
+          {
+            "$ref": "#/components/parameters/ts"
+          },
+          {
+            "$ref": "#/components/parameters/nonce"
+          },
+          {
+            "$ref": "#/components/parameters/sig"
+          },
+          {
+            "$ref": "#/components/parameters/assertion"
+          },
+          {
+            "name": "x-mpc-status-token",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scopes",
+                  "key_hash",
+                  "product_key_id"
+                ],
+                "properties": {
+                  "ticket": {
+                    "type": "string",
+                    "nullable": true
+                  },
+                  "screen": {
+                    "type": "string"
+                  },
+                  "scopes": {
+                    "type": "array",
+                    "items": {
+                      "enum": [
+                        "read_ticket",
+                        "read_event",
+                        "edit_event",
+                        "create_event",
+                        "invite",
+                        "report"
+                      ]
+                    }
+                  },
+                  "key_hash": {
+                    "type": "string"
+                  },
+                  "ttl_s": {
+                    "type": "integer",
+                    "minimum": 60,
+                    "maximum": 86400
+                  },
+                  "product_key_id": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "501": {
-            "description": "Not built in 0.1.0"
+          "201": {
+            "description": "Created; the instance adds k to link",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "link": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "type": "string"
+                    },
+                    "expires": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "bad_signature or no_assertion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate; header retry-after",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "try_later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
     },
     "/v1/ai-links/{id}": {
       "delete": {
-        "summary": "Revoke an AI link",
-        "x-status": "planned",
+        "summary": "Stop an AI link (same organizer session only)",
+        "x-status": "built",
+        "security": [
+          {
+            "signature": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/instance"
+          },
+          {
+            "$ref": "#/components/parameters/ts"
+          },
+          {
+            "$ref": "#/components/parameters/nonce"
+          },
+          {
+            "$ref": "#/components/parameters/sig"
+          },
+          {
+            "$ref": "#/components/parameters/assertion"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "501": {
-            "description": "Not built in 0.1.0"
+          "204": {
+            "description": "Stopped (also when already stopped)"
+          },
+          "401": {
+            "description": "bad_signature or no_assertion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "try_later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
           }
         }
       }
     },
     "/ai/{id}": {
       "get": {
-        "summary": "AI page",
-        "x-status": "planned",
+        "summary": "AI page (markdown). Headers: no-store, noindex, no-referrer.",
+        "x-status": "built",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "k",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "501": {
-            "description": "Not built in 0.1.0"
+          "200": {
+            "description": "The page",
+            "headers": {
+              "cache-control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "bad_link, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ticket_gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "try_later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
           }
         }
       }
     },
     "/ai/{id}.json": {
       "get": {
-        "summary": "AI page, machine copy",
-        "x-status": "planned",
+        "summary": "AI page (JSON twin)",
+        "x-status": "built",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "k",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
         "responses": {
-          "501": {
-            "description": "Not built in 0.1.0"
+          "200": {
+            "description": "The page",
+            "headers": {
+              "cache-control": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "bad_link, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ticket_gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "try_later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
           }
         }
       }
     },
     "/v1/ai/context": {
       "get": {
-        "summary": "AI context",
-        "x-status": "planned",
+        "summary": "AI context (Authorization: Bearer k)",
+        "x-status": "built",
         "responses": {
-          "501": {
-            "description": "Not built in 0.1.0"
+          "200": {
+            "description": "Ticket, screen, scopes, expiry, approved, calls"
+          },
+          "401": {
+            "description": "bad_link, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "out_of_scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ticket_gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "try_later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
           }
         }
       }
     },
     "/v1/ai/notes": {
       "post": {
-        "summary": "AI notes",
-        "x-status": "planned",
+        "summary": "AI note: plan, step, done or blocked, up to 800 characters",
+        "x-status": "built",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "type",
+                  "text"
+                ],
+                "properties": {
+                  "type": {
+                    "enum": [
+                      "plan",
+                      "step",
+                      "done",
+                      "blocked"
+                    ]
+                  },
+                  "text": {
+                    "type": "string",
+                    "maxLength": 800
+                  }
+                }
+              }
+            }
+          }
+        },
         "responses": {
-          "501": {
-            "description": "Not built in 0.1.0"
+          "201": {
+            "description": "Stored; says what comes next"
+          },
+          "401": {
+            "description": "bad_link, expired or revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "forbidden_action or out_of_scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "ticket_gone",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "plan_not_approved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "too_large",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "bad_note",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "slow_down",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "try_later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiError"
+                }
+              }
+            }
           }
         }
       }
@@ -498,9 +1134,6 @@
             "application/json": {
               "schema": {
                 "type": "object",
-                "required": [
-                  "status"
-                ],
                 "properties": {
                   "status": {
                     "enum": [
@@ -511,6 +1144,10 @@
                   "team_note": {
                     "type": "string",
                     "maxLength": 500
+                  },
+                  "erase": {
+                    "type": "boolean",
+                    "description": "Erase now. Must be the only field."
                   }
                 }
               }
@@ -550,6 +1187,208 @@
           }
         },
         "description": "Closed until access exists: the Cloudflare Access check is not built, so every call answers 401 (no_team_login) for now."
+      }
+    },
+    "/v1/ai-links/{id}/approve": {
+      "post": {
+        "summary": "Organizer approves the plan (added; needs a plan note)",
+        "x-status": "built",
+        "security": [
+          {
+            "signature": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/instance"
+          },
+          {
+            "$ref": "#/components/parameters/ts"
+          },
+          {
+            "$ref": "#/components/parameters/nonce"
+          },
+          {
+            "$ref": "#/components/parameters/sig"
+          },
+          {
+            "$ref": "#/components/parameters/assertion"
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approved"
+          },
+          "400": {
+            "description": "bad_request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "bad_signature or no_assertion",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "role",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "try_later",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/team/tickets/{ticket}/screenshot": {
+      "get": {
+        "summary": "Team: screenshot of one ticket (added). Closed until Access login is set up.",
+        "x-status": "closed-until-access",
+        "description": "Closed until Access login is set up. Team login only. Never public.",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "product",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The file",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no_team_login",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "not_found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team": {
+      "get": {
+        "summary": "The team list page (HTML). Closed until Access login is set up.",
+        "x-status": "closed-until-access",
+        "description": "The team list page (HTML). Closed until Access login is set up.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "401": {
+            "description": "no_team_login",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/app.js": {
+      "get": {
+        "summary": "Script of the team page. Closed until Access login is set up.",
+        "x-status": "closed-until-access",
+        "description": "Script of the team page. Closed until Access login is set up.",
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "401": {
+            "description": "no_team_login",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -810,6 +1649,40 @@
           "cursor": {
             "type": "string",
             "nullable": true
+          }
+        }
+      },
+      "AiError": {
+        "type": "object",
+        "required": [
+          "error",
+          "message",
+          "next"
+        ],
+        "properties": {
+          "error": {
+            "enum": [
+              "bad_link",
+              "expired",
+              "revoked",
+              "forbidden_action",
+              "out_of_scope",
+              "ticket_gone",
+              "plan_not_approved",
+              "too_large",
+              "bad_note",
+              "slow_down",
+              "try_later"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "next": {
+            "type": "string"
+          },
+          "retry_after": {
+            "type": "integer"
           }
         }
       }

@@ -11,6 +11,7 @@
     "retention_class": { "enum": ["games", "records"] },
     "enabled": { "type": "boolean" },
     "routes": { "type": "object", "propertyNames": { "pattern": "^/[^?#\\s\\d@]*$" }, "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 40 } },
+    "ai_calls": { "type": "array", "maxItems": 20, "items": { "type": "string", "minLength": 1, "maxLength": 160 } },
     "role_map": { "type": "object", "additionalProperties": { "enum": ["organizer", "co-organizer"] } },
     "core_min": { "type": "string", "pattern": "^\\d+\\.\\d+$" },
     "core_max": { "type": "string", "pattern": "^\\d+\\.(\\d+|x)$" },

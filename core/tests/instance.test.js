@@ -14,7 +14,7 @@ for (const [name, patch] of bad) test('S-011 invalid: ' + name, () => { const r 
 test('S-011 not an object', () => { for (const v of [null, [], 'x', 5]) expect(validateInstance(v).ok).toBe(false); });
 test('S-011 schema file lists the same required fields as the validator', () => {
   for (const k of schema.required) expect(validateInstance({ ...good(), [k]: undefined }).ok, k).toBe(false);
-  expect(Object.keys(schema.properties).sort()).toEqual(['allowed_origins', 'brand', 'core_max', 'core_min', 'enabled', 'id', 'kb_version', 'name', 'require_ip', 'retention_class', 'role_map', 'routes', 'tickets_per_day']);
+  expect(Object.keys(schema.properties).sort()).toEqual(['ai_calls', 'allowed_origins', 'brand', 'core_max', 'core_min', 'enabled', 'id', 'kb_version', 'name', 'require_ip', 'retention_class', 'role_map', 'routes', 'tickets_per_day']);
 });
 test('S-011 parseInstances drops invalid and disabled records, bad JSON gives none', () => {
   expect([...parseInstances(JSON.stringify([good(), { id: 'x' }, { ...good(), id: 'off-one', enabled: false }])).keys()]).toEqual(['example-product']);
@@ -25,3 +25,7 @@ test('S-011 secret names come from the id; short or missing secrets are ignored'
   expect(secretsFromEnv({ SECRET_X_Y: 'a'.repeat(20), SECRET_X_Y_NEXT: 'short' }, 'x-y', 'sign')).toEqual(['a'.repeat(20)]);
 });
 test('S-011 the instance record has no secret field in the example', () => expect(JSON.stringify(good())).not.toMatch(/secret|password|token/i));
+test('C6 ai_calls: up to 20 one-line strings; anything else is refused', () => {
+  expect(validateInstance({ ...good(), ai_calls: ['GET /events/{event}  read the draft'] }).ok).toBe(true);
+  for (const bad of ['x', [5], ['a\nb'], ['a`b'], [''], Array(21).fill('x')]) expect(validateInstance({ ...good(), ai_calls: bad }).ok, JSON.stringify(bad)).toBe(false);
+});

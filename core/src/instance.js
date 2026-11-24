@@ -26,6 +26,7 @@ export function validateInstance(c) {
   if (c.kb_version !== undefined && (typeof c.kb_version !== 'string' || c.kb_version.length > 40)) errors.push('kb_version: text up to 40 chars');
   if (c.tickets_per_day !== undefined && !(Number.isInteger(c.tickets_per_day) && c.tickets_per_day >= 1 && c.tickets_per_day <= 10000)) errors.push('tickets_per_day: whole number 1 to 10000');
   if (c.require_ip !== undefined && typeof c.require_ip !== 'boolean') errors.push('require_ip: true or false');
+  if (c.ai_calls !== undefined && !(Array.isArray(c.ai_calls) && c.ai_calls.length <= 20 && c.ai_calls.every((x) => typeof x === 'string' && x.length >= 1 && x.length <= 160 && !/[\u0000-\u001f`]/.test(x)))) errors.push('ai_calls: up to 20 lines of text, 1 to 160 chars, one line each');
   if (c.brand !== undefined && !(c.brand && typeof c.brand === 'object' && /^#[0-9a-fA-F]{6}$/.test(c.brand.primary || ''))) errors.push('brand.primary: colour like #1a2b3c');
   return errors.length ? { ok: false, errors } : { ok: true, value: c };
 }

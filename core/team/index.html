@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Moneypenny Chat: team list</title>
+<style>
+body { font: 16px/1.5 system-ui, sans-serif; margin: 1rem; color: #111; background: #fff; }
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: .4rem .6rem; border-bottom: 1px solid #ccc; }
+button, input, select, textarea { font: inherit; padding: .4rem .6rem; }
+button:focus, input:focus, select:focus, textarea:focus, a:focus { outline: 3px solid #1a4fd6; outline-offset: 2px; }
+.warn { background: #fff3cd; border: 1px solid #8a6d00; padding: .5rem .75rem; margin: .75rem 0; }
+.text { white-space: pre-wrap; border: 1px solid #ccc; padding: .5rem .75rem; }
+img { max-width: 100%; border: 1px solid #ccc; }
+</style>
+</head>
+<body>
+<main>
+<h1>Tickets</h1>
+<p id="msg" role="status"></p>
+<form id="filters">
+<label for="product">Product</label> <input id="product" name="product" autocomplete="off">
+<label for="status">Status</label>
+<select id="status" name="status"><option value="">All</option><option value="new">New</option><option value="seen">Seen</option><option value="done">Done</option></select>
+<button type="submit">Show</button>
+</form>
+<table>
+<caption>Open the number to see the detail.</caption>
+<thead><tr><th scope="col">Number</th><th scope="col">Product</th><th scope="col">Option</th><th scope="col">Topic</th><th scope="col">Screen</th><th scope="col">Time</th><th scope="col">Status</th></tr></thead>
+<tbody id="rows"></tbody>
+</table>
+<button type="button" id="more" hidden>Show more</button>
+<section id="detail" hidden aria-labelledby="dh">
+<h2 id="dh">Ticket</h2>
+<p class="warn">This may contain personal data: view only, do not forward.</p>
+<p id="meta"></p>
+<div id="body" class="text"></div>
+<div id="shot"></div>
+<label for="note">Reply (up to 500 characters)</label><br>
+<textarea id="note" maxlength="500" rows="4" cols="50"></textarea><br>
+<button type="button" id="seen">Mark seen</button>
+<button type="button" id="done">Mark done</button>
+<button type="button" id="erase">Erase now</button>
+</section>
+</main>
+<script src="/team/app.js"></script>
+</body>
+</html>
