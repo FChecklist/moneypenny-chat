@@ -117,6 +117,7 @@ export async function teamUpdate(ctx, inst, number, b) {
   const patch = { status: b.status, updated: now };
   if (b.team_note !== undefined) patch.team_note = scrub(clean(b.team_note));
   if (b.status === 'done') { patch.done_at = cur.done_at ?? now; patch.erase_at = eraseAtDone(inst.retention_class, cur.created, patch.done_at); }
+  else if (cur.done_at != null) { patch.done_at = null; patch.erase_at = eraseAtCreate(inst.retention_class, cur.created); } // re-opened: back to the receipt-based window
   const r = await ctx.store.updateTicket(inst.id, number, patch, now);
   return r ? { status: 200, body: item(r) } : { error: 'not_found' };
 }

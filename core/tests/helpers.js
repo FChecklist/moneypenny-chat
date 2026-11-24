@@ -13,10 +13,10 @@ export const SCHEMA = readFileSync(new URL('../schema.sql', import.meta.url), 'u
 export const fixture = (n) => JSON.parse(readFileSync(new URL('../../contract/fixtures/' + n, import.meta.url), 'utf8'));
 export const SECRET = 's'.repeat(32), ASSERT = 'a'.repeat(32);
 
-export function fakeNamespace() {
+export function fakeNamespace(opts) {
   const store = new Map();
   const storage = { get: async (k) => { await 0; return store.get(k); }, put: async (k, v) => { await 0; store.set(k, v); }, delete: async (k) => void store.delete(k), list: async () => new Map(store), getAlarm: async () => null, setAlarm: async () => {} };
-  const l = new Limits({ storage });
+  const l = new Limits({ storage }, opts);
   return { idFromName: (n) => n, get: () => ({ fetch: (u, init) => l.fetch(new Request(u, init)) }) };
 }
 // Minimal D1 over bun:sqlite: prepare().bind().first()/all()/run() and batch() as one transaction.
@@ -34,8 +34,8 @@ export function fakeD1() {
 
 export const STORES = { memory: () => memoryStore(), d1: () => d1Store(fakeD1()) };
 
-export function makeEnv({ store = 'memory', instance = fixture('instance-example.json'), now = () => Date.now(), team = false } = {}) {
-  const instances = parseInstances([instance]), limiter = makeLimiter(fakeNamespace()), st = STORES[store]();
+export function makeEnv({ store = 'memory', instance = fixture('instance-example.json'), now = () => Date.now(), team = false, nonceCap } = {}) {
+  const instances = parseInstances([instance]), limiter = makeLimiter(fakeNamespace({ nonceCap })), st = STORES[store]();
   const secrets = (id, kind) => (kind === 'sign' ? [SECRET] : [ASSERT]);
   const app = createApp({ instances, secrets, store: st, limiter, now, teamAuth: team ? () => true : undefined });
   const n = { c: 0 }; const hex = () => (++n.c).toString(16).padStart(32, '0');

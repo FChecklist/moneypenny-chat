@@ -27,7 +27,7 @@ Answer: Left out of v2. The old Worker keeps running for the tambola site until 
 Answer: Address only as platform secret `TEAM_EMAIL`. Cloudflare Access for `/team`. Recommended, owner to confirm. The Access check is not built; team routes refuse every call until it is.
 
 ## I8. Screenshot of personal data
-Answer: Mask by default with `data-mpc-hide` (step S-062). Owner to decide if townhall-records screenshots are allowed on voter-list screens. Open.
+Answer: Mask by default with `data-mpc-hide` (step S-062). Until the owner decides, no screenshot is taken on voter-list screens of townhall-records (the simplest safe option). Recommended, owner to confirm. Not built yet, because the widget and the product pages are not in this repo.
 
 ## I9. The AI link is a bearer link
 Answer: Short life (2 hours), revoke button, scopes in the product backend. Recommended, owner to confirm. Not built yet.
@@ -55,7 +55,7 @@ The `DB` binding in `core/wrangler.toml` is commented out and holds no database 
 The D1 store allocates the number inside the same batch, after the idempotency insert. A lost race rolls the batch back, so no number is burned. The memory store behaves the same.
 
 ## Stored idempotency answer
-The idempotency row keeps the first answer for 24 hours (`expires`). The status token inside it is stored only encrypted (AES-GCM, key derived from the instance signing secret) and is decrypted on a replay. The raw token is never stored; the ticket row keeps only its sha256. If the secret is changed so that no active secret fits, a replay fails with `try_later` (fail closed). Old rows are ignored after `expires`; an erase job that deletes them is not built yet.
+The idempotency row keeps the first answer for 23 hours (`expires`), one hour less than the shortest ticket erase window (games: 24 hours), so a replay never points at an erased ticket. The status token inside it is stored only encrypted (AES-GCM, key derived from the instance signing secret) and is decrypted on a replay. The raw token is never stored; the ticket row keeps only its sha256. If the secret is changed so that no active secret fits, a replay fails with `try_later` (fail closed). Old rows are ignored after `expires`; an erase job that deletes them is not built yet.
 
 ## Visitor address is signed
 `x-mpc-ip` is part of the signed text when it is sent, so it cannot be changed after signing.
@@ -73,10 +73,22 @@ If `x-mpc-ip` is missing, the rate-limit bucket is a hash of the signed session 
 Every product backend must send `x-mpc-ip` (the visitor address) on every signed call. The product backend picks the session id, so a bucket built from it can be changed by that backend. To refuse a call without the header, set `require_ip: true` in the instance record (default `false`). The call then fails with `bad_request`, field `x-mpc-ip`.
 
 ## Secret rotation
-Encryption of the stored status token always uses the first (primary) secret. Opening tries every active secret. During a rotation the old secret stays configured for 24 hours, the same time an idempotency row lives, so a replay sealed with the old secret still opens. After 24 hours remove the old secret.
+Encryption of the stored status token always uses the first (primary) secret. Opening tries every active secret. During a rotation the old secret stays configured for 24 hours, longer than the 23 hours an idempotency row lives, so a replay sealed with the old secret still opens. After 24 hours remove the old secret.
 
 ## Encryption key
 The AES-GCM key is the raw 32 bytes of the HMAC-SHA-256 digest (256 bits). Nothing is deployed yet, so no migration is needed.
 
 ## Counters on a store failure
 If the store throws while a ticket is created, the limit counters taken for that call are given back before the error goes on.
+
+## Nonce cap
+The Durable Object keeps at most 5,000 live nonces (`NONCE_CAP` in `core/src/limits.js`). When full, a valid signed request is refused with `rate` (429) until old nonces expire (10 minutes). Only valid signatures can fill it.
+
+## Re-opening a ticket
+Setting a done ticket back to `seen` clears `done_at` and sets `erase_at` to the receipt-based time (games: 24 hours, records: 90 days).
+
+## Reviewed and not defects (round 4)
+- Split-digit scrub limit: accepted (see known limits above).
+- Team routes fail closed until the Access check exists.
+- A sealed status token cannot contain the placeholder text.
+- Batch order in the D1 store is covered by the fake D1 tests.

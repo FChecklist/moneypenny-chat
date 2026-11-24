@@ -83,6 +83,12 @@ for (const store of Object.keys(STORES)) {
     t += 24 * 3600e3 + 1000; // key expired; the ticket (games: 24 h) is erased too
     const b = await post(e, base({}), { key, sess: 'sess-one-1' }); expect(b.status).toBe(201); expect((await b.json()).ticket).not.toBe(a.ticket);
   });
+  test(`[${store}] round 4: key lives 23 h, one hour less than the shortest erase window; replay at 22h59 never meets an erased ticket`, async () => {
+    let t = Date.now(); const e = E({ now: () => t }), key = crypto.randomUUID();
+    const a = await (await post(e, base({}), { key, sess: 'sess-one-1' })).json();
+    t += 23 * 3600e3 - 1000; const b = await post(e, base({}), { key, sess: 'sess-one-1' }); expect(b.headers.get('idempotent-replay')).toBeTruthy(); expect((await b.json()).ticket).toBe(a.ticket);
+    expect(await e.store.getTicket('example-product', a.ticket, t)).not.toBeNull();
+  });
   test(`[${store}] S-022 a replay does not use up a rate limit slot`, async () => {
     const e = E(), key = crypto.randomUUID(); for (let i = 0; i < 20; i++) expect((await post(e, base({}), { key })).status).toBe(201);
     for (let i = 0; i < TICKET_LIMITS.sessHour - 1; i++) expect((await post(e, base({ text: 'Another idea number ' + i }))).status).toBe(201);
@@ -156,6 +162,16 @@ for (const store of Object.keys(STORES)) {
     expect((await e.plain('PATCH', '/v1/team/tickets/T-0099?product=example-product', { status: 'done' })).status).toBe(404);
     expect((await e.plain('PATCH', '/v1/team/tickets/T-0001', { status: 'done' })).status).toBe(400);
     expect((await e.plain('GET', '/v1/team/tickets?status=weird')).status).toBe(400); expect((await e.plain('GET', '/v1/team/tickets?cursor=abc')).status).toBe(400);
+  });
+  test(`[${store}] round 4: re-opening a ticket after done resets done_at and erase_at (both classes)`, async () => {
+    for (const cls of ['games', 'records']) {
+      let now = Date.now(); const e = E({ team: true, now: () => now, instance: { ...fixture('instance-example.json'), retention_class: cls } }), t0 = now; await post(e, base({}));
+      const P = (b) => e.plain('PATCH', '/v1/team/tickets/T-0001?product=example-product', b), G = () => e.store.getTicket('example-product', 'T-0001', now);
+      const first = (await G()).erase_at; now += 3600e3; await P({ status: 'done' }); expect((await G()).done_at).toBe(now);
+      now += 3600e3; expect((await P({ status: 'seen' })).status).toBe(200);
+      const r = await G(); expect(r.done_at).toBeNull(); expect(r.erase_at).toBe(first); expect(r.erase_at).toBe(t0 + (cls === 'games' ? 24 * 3600e3 : 90 * 864e5));
+      await P({ status: 'done' }); expect((await G()).done_at).toBe(now); // closing again starts from the new close time
+    }
   });
   test(`[${store}] team list pages with a cursor`, async () => {
     const e = E({ team: true }); for (let i = 0; i < 3; i++) await post(e, base({ text: 'Idea number ' + i + ' here' }), { sess: 'session-' + i.toString().padStart(4, '0') });

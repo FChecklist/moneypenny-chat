@@ -9,3 +9,8 @@ test('S-025 records: 90 days at receipt; done gives done + 30 days, never past 9
   expect(eraseAtDone('records', T, T + 2 * D)).toBe(T + 32 * D);
   expect(eraseAtDone('records', T, T + 80 * D)).toBe(T + 90 * D);
 });
+import { IDEM_TTL_MS } from '../src/idem.js';
+test('round 4: idempotency TTL is one hour shorter than every ticket erase window', () => {
+  expect(IDEM_TTL_MS).toBe(23 * H);
+  for (const c of ['games', 'records']) expect(eraseAtCreate(c, T) - T - IDEM_TTL_MS).toBeGreaterThanOrEqual(H);
+});

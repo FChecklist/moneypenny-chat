@@ -1,5 +1,12 @@
 # Moneypenny Chat core changelog
 
+## 0.1.4 - 25 Nov 2026 - round 4 fixes
+- Rate limit: the Durable Object keeps at most 5,000 live nonces. More signed requests are refused with `rate` (429) until old nonces expire (10 minutes).
+- Tickets: re-opening a ticket after done clears `done_at` and sets `erase_at` back to the receipt-based time.
+- Idempotency: a key now lives 23 hours, one hour less than the shortest ticket erase window, so a replay never points at an erased ticket.
+- Docs: I8 has a recommended answer; every question I1 to I13 has an answer line.
+- Tests: one new test per fix.
+
 ## 0.1.3 - 25 Nov 2026 - round 3 fixes
 - Tickets: a topic with 8 or more digits in total is refused (`bad_request`, field `topic`).
 - Rate limit: counters taken before the store call are given back when the store throws.

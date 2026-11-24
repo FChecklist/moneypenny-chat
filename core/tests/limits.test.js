@@ -25,3 +25,12 @@ test('S-013 unknown op is an error; the class is the old one (alarm sweeps expir
   await new Limits({ storage: { list: async () => new Map(m), delete: async (k) => void m.delete(k) } }).alarm();
   expect([...m.keys()]).toEqual(['new']);
 });
+const TEST_CAP = 3;
+test('round 4: nonce cap per instance refuses new nonces (rate) until old ones expire; counters are not capped', async () => {
+  const { makeEnv } = await import('./helpers.js');
+  let t = Date.now(); const e = makeEnv({ nonceCap: TEST_CAP, now: () => t });
+  for (let i = 0; i < TEST_CAP; i++) expect((await e.call('GET', '/v1/tickets/T-0001')).status).toBe(404);
+  const r = await e.call('GET', '/v1/tickets/T-0001'); expect(r.status).toBe(429); expect((await r.json()).error).toBe('rate');
+  const lim = makeLimiter(fakeNamespace({ nonceCap: 1 })); expect((await lim('c', { op: 'take', delta: 1, cap: 9, ttl: 60 })).ok).toBe(true); expect((await lim('c2', { op: 'take', delta: 1, cap: 9, ttl: 60 })).ok).toBe(true);
+  const real = Date.now; try { Date.now = () => real() + 601_000; t += 601_000; expect((await e.call('GET', '/v1/tickets/T-0001')).status).toBe(404); } finally { Date.now = real; }
+});

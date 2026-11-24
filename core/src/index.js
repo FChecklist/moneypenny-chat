@@ -35,6 +35,7 @@ async function signed(ctx, req, path, number) {
   const raw = await readText(req, MAX.json); if (raw === null) return fail('too_large');
   const secrets = inst ? ctx.secrets(id, 'sign') : [];
   const sig = await verifySignature({ headers: req.headers, method: req.method, path, body: raw, secrets, nonces: nonceStore(ctx.limiter), now: ctx.now() });
+  if (inst && sig.why === 'busy') return fail('rate'); // nonce table full: too many requests
   if (!inst || !sig.ok) return fail('bad_signature'); // unknown, disabled and wrong all look the same
   if (req.method === 'GET') return out(await T.readTicket(ctx, inst, number, req.headers.get('x-mpc-status-token')));
   const a = await verifyAssertion(req.headers.get('x-mpc-assertion'), { secrets: ctx.secrets(id, 'assert'), product: id, roleMap: inst.role_map, now: ctx.now() });

@@ -4,7 +4,7 @@ export const MAX_SKEW_S = 300, NONCE_TTL_S = 600;
 // x-mpc-ip is added as a sixth line only when the header is present, so it cannot be changed after signing.
 export const canonical = async ({ method, path, ts, nonce, body, ip }) => [String(method).toUpperCase(), path, ts, nonce, await sha256hex(body), ...(ip ? [ip] : [])].join('\n');
 export const sign = async (secret, parts) => hmacHex(secret, await canonical(parts));
-export const nonceStore = (limiter) => ({ take: async (key) => (await limiter('n:' + key, { op: 'take', delta: 1, cap: 1, ttl: NONCE_TTL_S })).ok === true });
+export const nonceStore = (limiter) => ({ take: async (key) => { const r = await limiter('n:' + key, { op: 'take', delta: 1, cap: 1, ttl: NONCE_TTL_S, nonce: true }); return r.full ? 'full' : r.ok === true; } });
 
 // headers: object with get(). secrets: list of active secrets (rotation). Returns {ok:true} or {ok:false, why}.
 export async function verifySignature({ headers, method, path, body, secrets, nonces, now = Date.now() }) {
@@ -14,6 +14,7 @@ export async function verifySignature({ headers, method, path, body, secrets, no
   const expected = await Promise.all(secrets.map((s) => sign(s, { method, path, ts, nonce, body, ip: headers.get('x-mpc-ip') || '' })));
   let good = false; for (const e of expected) if (timingEqual(e, sig)) good = true; // no early exit
   if (!good) return { ok: false, why: 'signature' };
-  if (!(await nonces.take(instance + ':' + nonce))) return { ok: false, why: 'replay' }; // only a valid signature may use up a nonce
+  const took = await nonces.take(instance + ':' + nonce); if (took === 'full') return { ok: false, why: 'busy' };
+  if (!took) return { ok: false, why: 'replay' }; // only a valid signature may use up a nonce
   return { ok: true };
 }
