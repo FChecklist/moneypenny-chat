@@ -1,0 +1,24 @@
+# S-004: core Worker config. Test mode only: nothing here is deployed. No secrets, no account ids, no database id (the owner fills it at deploy).
+name = "moneypenny-chat-core"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+INSTANCES = "[]"              # JSON array of instance records (no secrets). Example in ../contract/fixtures/instance-example.json
+PAY_VIA_MONEYPENNY = "0"      # money flag: stays OFF
+
+# [[d1_databases]]  binding = "DB"  database_name = "moneypenny-chat-core"  database_id = "<set at deploy>"
+# Apply the schema:  wrangler d1 execute moneypenny-chat-core --file schema.sql
+
+# Atomic counters and nonces. One Durable Object serialises every update.
+[[durable_objects.bindings]]
+name = "LIMITS"
+class_name = "Limits"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Limits"]
+
+# Secrets (never in git), per instance ID, upper case, "-" as "_":
+#   wrangler secret put SECRET_<ID>            signing secret (SECRET_<ID>_NEXT while rotating)
+#   wrangler secret put SECRET_<ID>_ASSERT     role assertion secret (_NEXT while rotating)

@@ -1,0 +1,174 @@
+import { test, expect } from 'bun:test';
+import { makeEnv, fixture, STORES } from './helpers.js';
+import { TICKET_LIMITS } from '../src/tickets.js';
+import { signAssertion } from '../src/assertion.js';
+import { ASSERT } from './helpers.js';
+
+for (const store of Object.keys(STORES)) {
+  const E = (o = {}) => makeEnv({ store, ...o });
+  const post = (e, b, o) => e.call('POST', '/v1/tickets', b, o);
+  const err = async (r) => (await r.json());
+
+  test(`[${store}] S-021 one ticket per option; numbers count up; response has token and erase_at`, async () => {
+    const e = E(); const out = [];
+    for (const f of ['ticket-help.json', 'ticket-suggest.json', 'ticket-stuck.json']) { const r = await post(e, fixture(f), { sess: 's-' + f.replace(/\W/g, '') + '-xx' }); expect(r.status).toBe(201); out.push(await r.json()); }
+    expect(out.map((o) => o.ticket)).toEqual(['T-0001', 'T-0002', 'T-0003']);
+    expect(out[0].status_token.length).toBeGreaterThanOrEqual(40); expect(Date.parse(out[0].erase_at)).toBeGreaterThan(Date.now());
+  });
+  test(`[${store}] S-021 screen is cleaned, label comes from the route table, text is scrubbed, ids never stored`, async () => {
+    const e = E(); const b = fixture('ticket-stuck.json'); b.text = 'Mail me at user@example.com or 9876543210'; b.screen_label = 'Whatever the browser says';
+    const t = await (await post(e, b)).json();
+    const row = await e.store.getTicket('example-product', t.ticket, Date.now());
+    expect(row.screen).toBe('/console/game/:x/run'); expect(row.screen_label).toBe('Run a game'); expect(row.text).toBe('Mail me at [removed] or [removed]');
+    expect(row.role).toBe('co-organizer'); expect(row.client_class).toBe('mobile'); expect(row.client_w).toBe(375); expect(row.token_hash).not.toBe(t.status_token);
+    const unknown = fixture('ticket-help.json'); unknown.screen = '/somewhere/else'; const t2 = await (await post(e, unknown)).json();
+    expect((await e.store.getTicket('example-product', t2.ticket, Date.now())).screen_label).toBe('This screen');
+  });
+  const base = (o) => ({ ...fixture('ticket-suggest.json'), ...o });
+  const badInputs = [
+    ['option', { option: 'nope' }], ['option missing', { option: undefined }], ['type missing on suggest', { type: null }], ['type invalid', { type: 'bug' }], ['type on non-suggest', { option: 'stuck', type: 'feature', topic: 'x' }],
+    ['text too short', { text: 'too short' }], ['text too long', { text: 'a'.repeat(601) }], ['text not a string', { text: 5 }], ['topic bad chars', { topic: 'Bad Topic!' }], ['topic on help missing', { option: 'help_more', type: null, topic: null }],
+    ['stuck with no topic and no text', { option: 'stuck', type: null, topic: null, text: '' }], ['screen too long', { screen: '/' + 'a'.repeat(250) }], ['screen not a string', { screen: 5 }], ['screen_label too long', { screen_label: 'a'.repeat(61) }],
+    ['screenshot_id given', { screenshot_id: 'abc' }], ['role bad', { role: 'player' }], ['client bad ua', { client: { w: 1, h: 1, ua_class: 'tv' } }], ['client bad width', { client: { w: 0, h: 1, ua_class: 'mobile' } }], ['client not object', { client: 'x' }],
+  ];
+  for (const [name, patch] of badInputs) test(`[${store}] S-021 bad input: ${name} gives 400 bad_request`, async () => {
+    const e = E(); const b = { ...base({}), ...patch }; for (const k of Object.keys(b)) if (b[k] === undefined) delete b[k];
+    const r = await post(e, b); expect(r.status).toBe(400); const j = await err(r); expect(j.error).toBe('bad_request'); expect(typeof j.field).toBe('string');
+  });
+  test(`[${store}] S-021 text of exactly 10 and 600 characters passes; stuck with topic and no text passes`, async () => {
+    const e = E();
+    expect((await post(e, base({ text: 'a'.repeat(10) }), { sess: 'sess-aaaa' })).status).toBe(201);
+    expect((await post(e, base({ text: 'é'.repeat(600) }), { sess: 'sess-bbbb' })).status).toBe(201);
+    expect((await post(e, { ...fixture('ticket-stuck.json'), text: '' }, { sess: 'sess-cccc' })).status).toBe(201);
+  });
+  test(`[${store}] S-021 not a JSON object, missing or bad idempotency key, wrong role proof`, async () => {
+    const e = E();
+    expect((await e.call('POST', '/v1/tickets', undefined, { rawBody: '{oops' })).status).toBe(400);
+    expect((await e.call('POST', '/v1/tickets', undefined, { rawBody: '[1]' })).status).toBe(400);
+    const r = await post(e, base({}), { key: 'not-a-uuid' }); expect((await err(r)).field).toBe('idempotency-key');
+    expect((await post(e, base({}), { assertion: null })).status).toBe(401);
+    let x = await post(e, base({}), { assertion: 'junk.junk' }); expect((await err(x)).error).toBe('no_assertion');
+    x = await post(e, base({}), { role: 'player' }); expect(x.status).toBe(403); expect((await err(x)).error).toBe('role');
+    x = await post(e, base({}), { product: 'other-product' }); expect((await err(x)).error).toBe('no_assertion');
+    x = await post(e, base({ role: 'co-organizer' }), { role: 'organizer' }); expect(x.status).toBe(403); // body role must equal the proven role
+  });
+  test(`[${store}] S-021 a co-organizer proof needs no role in the body`, async () => {
+    const e = E(); const b = base({}); delete b.role; const r = await post(e, b, { role: 'host' }); expect(r.status).toBe(201);
+    expect((await e.store.getTicket('example-product', 'T-0001', Date.now())).role).toBe('co-organizer');
+  });
+
+  test(`[${store}] S-022 same key and same body: same answer, header, one ticket`, async () => {
+    const e = E(), b = base({}), key = crypto.randomUUID();
+    const a = await post(e, b, { key }); const c = await post(e, b, { key });
+    expect(a.headers.get('idempotent-replay')).toBeNull(); expect(c.headers.get('idempotent-replay')).toBe('true');
+    expect(await c.json()).toEqual(await a.json());
+    expect((await e.store.listTickets({ now: Date.now() })).items.length).toBe(1);
+  });
+  test(`[${store}] S-022 same key and different body gives 409; the first ticket stays`, async () => {
+    const e = E(), key = crypto.randomUUID(); await post(e, base({}), { key });
+    const r = await post(e, base({ text: 'A different idea entirely.' }), { key }); expect(r.status).toBe(409); expect((await err(r)).error).toBe('idempotency_conflict');
+    expect((await e.store.listTickets({ now: Date.now() })).items.length).toBe(1);
+  });
+  test(`[${store}] S-022 parallel taps with one key make exactly one ticket`, async () => {
+    const e = E(), key = crypto.randomUUID(), b = base({});
+    const rs = await Promise.all(Array.from({ length: 4 }, () => post(e, b, { key })));
+    expect(rs.every((r) => r.status === 201)).toBe(true);
+    expect(new Set(await Promise.all(rs.map(async (r) => (await r.json()).ticket))).size).toBe(1);
+    expect(rs.filter((r) => !r.headers.get('idempotent-replay')).length).toBe(1);
+    expect((await e.store.listTickets({ now: Date.now() })).items.length).toBe(1);
+  });
+  test(`[${store}] S-022 the key is kept 24 hours, then it is a new ticket; keys are per instance`, async () => {
+    let t = Date.now(); const e = E({ now: () => t }), key = crypto.randomUUID();
+    const a = await (await post(e, base({}), { key, sess: 'sess-one-1' })).json();
+    t += 24 * 3600e3 + 1000; // key expired; the ticket (games: 24 h) is erased too
+    const b = await post(e, base({}), { key, sess: 'sess-one-1' }); expect(b.status).toBe(201); expect((await b.json()).ticket).not.toBe(a.ticket);
+  });
+  test(`[${store}] S-022 a replay does not use up a rate limit slot`, async () => {
+    const e = E(), key = crypto.randomUUID(); for (let i = 0; i < 20; i++) expect((await post(e, base({}), { key })).status).toBe(201);
+    for (let i = 0; i < TICKET_LIMITS.sessHour - 1; i++) expect((await post(e, base({ text: 'Another idea number ' + i }))).status).toBe(201);
+  });
+
+  test(`[${store}] S-023 session limit: exactly 5 of 12 parallel admitted, others 429 with retry-after`, async () => {
+    const e = E(); const rs = await Promise.all(Array.from({ length: 12 }, (_, i) => post(e, base({ text: 'Idea number ' + i + ' here' }), { ip: '9.9.9.' + i })));
+    const ok = rs.filter((r) => r.status === 201), no = rs.filter((r) => r.status === 429);
+    expect(ok.length).toBe(TICKET_LIMITS.sessHour); expect(no.length).toBe(12 - 5);
+    expect(Number(no[0].headers.get('retry-after'))).toBeGreaterThan(0); const j = await err(no[0]); expect(j.error).toBe('rate'); expect(j.retry_after).toBe(Number(no[0].headers.get('retry-after')));
+    expect((await e.store.listTickets({ now: Date.now() })).items.length).toBe(5);
+  });
+  test(`[${store}] S-023 address limit: exactly 10 of 16 parallel (different sessions, one address)`, async () => {
+    const e = E(); const rs = await Promise.all(Array.from({ length: 16 }, (_, i) => post(e, base({ text: 'Idea number ' + i + ' here' }), { sess: 'session-' + String(i).padStart(4, '0'), ip: '8.8.8.8' })));
+    expect(rs.filter((r) => r.status === 201).length).toBe(TICKET_LIMITS.ipHour);
+  });
+  test(`[${store}] S-023 instance limit comes from the record: exactly 3 of 8`, async () => {
+    const e = E({ instance: { ...fixture('instance-example.json'), tickets_per_day: 3 } });
+    const rs = await Promise.all(Array.from({ length: 8 }, (_, i) => post(e, base({ text: 'Idea number ' + i + ' here' }), { sess: 'session-' + String(i).padStart(4, '0'), ip: '7.7.7.' + i })));
+    expect(rs.filter((r) => r.status === 201).length).toBe(3);
+  });
+  test(`[${store}] S-023 the window moves on: after an hour the session can send again; a refusal gives its slots back`, async () => {
+    let t = Date.now(); const e = E({ now: () => t });
+    for (let i = 0; i < 5; i++) await post(e, base({ text: 'Idea number ' + i + ' here' }));
+    expect((await post(e, base({ text: 'Idea number 6 here' }))).status).toBe(429);
+    t += 3600e3; expect((await post(e, base({ text: 'Idea number 7 here' }))).status).toBe(201);
+  });
+  test(`[${store}] S-023 daily session limit is 15`, async () => {
+    let t = Math.floor(Date.now() / 864e5) * 864e5; const e = E({ now: () => t }); let ok = 0;
+    for (let h = 0; h < 4; h++) { for (let i = 0; i < 5; i++) if ((await post(e, base({ text: `Idea ${h} ${i} text here` }), { ip: `6.6.${h}.${i}` })).status === 201) ok++; t += 3600e3; }
+    expect(ok).toBe(TICKET_LIMITS.sessDay);
+  });
+
+  test(`[${store}] S-024 right token reads status; wrong, missing or other-instance token gives 404`, async () => {
+    const e = E(); const t = await (await post(e, base({}))).json();
+    let r = await e.call('GET', '/v1/tickets/' + t.ticket, undefined, { token: t.status_token, assertion: null }); expect(r.status).toBe(200);
+    expect(await r.json()).toEqual({ ticket: t.ticket, status: 'new', team_note: '', updated: expect.any(String) });
+    for (const token of ['wrong-token-value', undefined, t.status_token.slice(1)]) { r = await e.call('GET', '/v1/tickets/' + t.ticket, undefined, { token, assertion: null }); expect(r.status).toBe(404); expect((await err(r)).error).toBe('not_found'); }
+    expect((await e.call('GET', '/v1/tickets/T-9999', undefined, { token: t.status_token })).status).toBe(404);
+    expect((await e.plain('GET', '/v1/tickets/' + t.ticket)).status).toBe(401);
+  });
+  test(`[${store}] S-024 an erased ticket cannot be read`, async () => {
+    let now = Date.now(); const e = E({ now: () => now }); const t = await (await post(e, base({}))).json();
+    now += 25 * 3600e3; expect((await e.call('GET', '/v1/tickets/' + t.ticket, undefined, { token: t.status_token })).status).toBe(404);
+  });
+
+  test(`[${store}] S-025 games erase_at is receipt + 24 h; records is receipt + 90 days`, async () => {
+    const now = Date.now(); let e = E({ now: () => now }), t = await (await post(e, base({}))).json(); expect(Date.parse(t.erase_at)).toBe(now + 24 * 3600e3);
+    e = E({ now: () => now, instance: { ...fixture('instance-example.json'), retention_class: 'records' } }); t = await (await post(e, base({}))).json(); expect(Date.parse(t.erase_at)).toBe(now + 90 * 864e5);
+  });
+
+  // team side: list, read, close
+  test(`[${store}] team routes refuse everyone while no login check exists`, async () => {
+    const e = E(); for (const [m, p] of [['GET', '/v1/team/tickets'], ['GET', '/v1/team/tickets/T-0001?product=example-product'], ['PATCH', '/v1/team/tickets/T-0001?product=example-product']]) { const r = await e.plain(m, p, {}); expect(r.status).toBe(401); expect((await err(r)).error).toBe('no_team_login'); }
+  });
+  test(`[${store}] team list newest first, filters, cursor; detail has text; close sets done and the status shows to the user`, async () => {
+    const e = E({ team: true }); const toks = [];
+    for (let i = 0; i < 3; i++) toks.push(await (await post(e, base({ text: 'Idea number ' + i + ' here' }), { sess: 'session-' + i.toString().padStart(4, '0') })).json());
+    let r = await e.plain('GET', '/v1/team/tickets?product=example-product'); let j = await r.json();
+    expect(j.items.map((x) => x.ticket)).toEqual(['T-0003', 'T-0002', 'T-0001']); expect(j.cursor).toBeNull(); expect(j.items[0].text).toBeUndefined();
+    r = await e.plain('PATCH', '/v1/team/tickets/T-0002?product=example-product', { status: 'done', team_note: 'Fixed. Call 9876543210 to talk.' }); expect(r.status).toBe(200); expect((await r.json()).status).toBe('done');
+    j = await (await e.plain('GET', '/v1/team/tickets?status=done&product=example-product')).json(); expect(j.items.map((x) => x.ticket)).toEqual(['T-0002']);
+    j = await (await e.plain('GET', '/v1/team/tickets/T-0002?product=example-product')).json(); expect(j.text).toBe('Idea number 1 here'); expect(j.team_note).toBe('Fixed. Call [removed] to talk.');
+    const s = await (await e.call('GET', '/v1/tickets/T-0002', undefined, { token: toks[1].status_token })).json(); expect(s.status).toBe('done'); expect(s.team_note).toContain('Fixed');
+  });
+  test(`[${store}] team close: records erase_at = done + 30 days (max 90 from receipt); bad input is 400; unknown ticket 404`, async () => {
+    const now = Date.now(); const e = E({ team: true, now: () => now, instance: { ...fixture('instance-example.json'), retention_class: 'records' } }); await post(e, base({}));
+    await e.plain('PATCH', '/v1/team/tickets/T-0001?product=example-product', { status: 'done' });
+    expect((await e.store.getTicket('example-product', 'T-0001', now)).erase_at).toBe(now + 30 * 864e5);
+    for (const b of [{ status: 'new' }, {}, { status: 'seen', team_note: 'a'.repeat(501) }, { status: 'seen', team_note: 5 }]) expect((await e.plain('PATCH', '/v1/team/tickets/T-0001?product=example-product', b)).status).toBe(400);
+    expect((await e.plain('PATCH', '/v1/team/tickets/T-0099?product=example-product', { status: 'done' })).status).toBe(404);
+    expect((await e.plain('PATCH', '/v1/team/tickets/T-0001', { status: 'done' })).status).toBe(400);
+    expect((await e.plain('GET', '/v1/team/tickets?status=weird')).status).toBe(400); expect((await e.plain('GET', '/v1/team/tickets?cursor=abc')).status).toBe(400);
+  });
+  test(`[${store}] team list pages with a cursor`, async () => {
+    const e = E({ team: true }); for (let i = 0; i < 3; i++) await post(e, base({ text: 'Idea number ' + i + ' here' }), { sess: 'session-' + i.toString().padStart(4, '0') });
+    const all = await e.store.listTickets({ now: Date.now(), limit: 2 }); expect(all.items.length).toBe(2); expect(all.cursor).not.toBeNull();
+    const rest = await e.store.listTickets({ now: Date.now(), limit: 2, cursor: all.cursor }); expect(rest.items.map((x) => x.number)).toEqual(['T-0001']); expect(rest.cursor).toBeNull();
+  });
+}
+test('numbers repeat per instance (T-0001 in both) and one instance cannot read the other', async () => {
+  const { memoryStore } = await import('../src/store-memory.js'); const s = memoryStore(); const mk = (n) => (num) => ({ row: { number: num, erase_at: 9e15, token_hash: 'h' + n, status: 'new' }, response: { ticket: num } });
+  await s.createTicket('a', { keyHash: '1', bodyHash: 'x' }, mk('a'), 1); await s.createTicket('b', { keyHash: '1', bodyHash: 'x' }, mk('b'), 1);
+  expect((await s.getTicket('a', 'T-0001', 1)).token_hash).toBe('ha'); expect((await s.getTicket('b', 'T-0001', 1)).token_hash).toBe('hb'); expect(await s.getTicket('c', 'T-0001', 1)).toBeNull();
+});
+test('a ticket proof signed for one product cannot be used for another product call', async () => {
+  const e = makeEnv(); const tok = await signAssertion(ASSERT, { product: 'someone-else', role: 'organizer', sess: 'session-0001', exp: Math.floor(Date.now() / 1000) + 60 });
+  expect((await e.call('POST', '/v1/tickets', fixture('ticket-suggest.json'), { assertion: tok })).status).toBe(401);
+});

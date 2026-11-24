@@ -1,0 +1,12 @@
+{
+  "id": "example-product",
+  "name": "Example Product",
+  "allowed_origins": ["https://chat.example.test"],
+  "retention_class": "games",
+  "enabled": true,
+  "routes": { "/console/create": "Create a game", "/console/game/:x/run": "Run a game" },
+  "role_map": { "host": "co-organizer", "organizer": "organizer" },
+  "core_min": "0.1",
+  "core_max": "0.x",
+  "kb_version": "example-1"
+}

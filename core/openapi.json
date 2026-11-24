@@ -1,0 +1,795 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Moneypenny Chat core",
+    "version": "0.1.0",
+    "description": "Error body is always {\"error\": code, \"message\": text}. Every response has x-mpc-core-version."
+  },
+  "paths": {
+    "/v1/health": {
+      "get": {
+        "summary": "Health",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/version": {
+      "get": {
+        "summary": "Version",
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/help/topics": {
+      "get": {
+        "summary": "Help topics (served from the instance; the core defines the shape)",
+        "x-status": "planned",
+        "responses": {
+          "501": {
+            "description": "Not built in 0.1.0"
+          }
+        }
+      }
+    },
+    "/v1/tickets": {
+      "post": {
+        "summary": "Create a ticket",
+        "x-status": "built",
+        "security": [
+          {
+            "signature": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/instance"
+          },
+          {
+            "$ref": "#/components/parameters/ts"
+          },
+          {
+            "$ref": "#/components/parameters/nonce"
+          },
+          {
+            "$ref": "#/components/parameters/sig"
+          },
+          {
+            "$ref": "#/components/parameters/assertion"
+          },
+          {
+            "name": "idempotency-key",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TicketIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "created, or the same answer again with header idempotent-replay: true",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketOut"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/screenshots": {
+      "post": {
+        "summary": "Upload a screenshot",
+        "x-status": "planned",
+        "responses": {
+          "501": {
+            "description": "Not built in 0.1.0"
+          }
+        }
+      }
+    },
+    "/v1/tickets/{ticket}": {
+      "get": {
+        "summary": "Read a ticket status",
+        "x-status": "built",
+        "security": [
+          {
+            "signature": []
+          }
+        ],
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/instance"
+          },
+          {
+            "$ref": "#/components/parameters/ts"
+          },
+          {
+            "$ref": "#/components/parameters/nonce"
+          },
+          {
+            "$ref": "#/components/parameters/sig"
+          },
+          {
+            "name": "ticket",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^T-\\d{4,}$"
+            }
+          },
+          {
+            "name": "x-mpc-status-token",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TicketStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/ai-links": {
+      "post": {
+        "summary": "Create an AI link",
+        "x-status": "planned",
+        "responses": {
+          "501": {
+            "description": "Not built in 0.1.0"
+          }
+        }
+      }
+    },
+    "/v1/ai-links/{id}": {
+      "delete": {
+        "summary": "Revoke an AI link",
+        "x-status": "planned",
+        "responses": {
+          "501": {
+            "description": "Not built in 0.1.0"
+          }
+        }
+      }
+    },
+    "/ai/{id}": {
+      "get": {
+        "summary": "AI page",
+        "x-status": "planned",
+        "responses": {
+          "501": {
+            "description": "Not built in 0.1.0"
+          }
+        }
+      }
+    },
+    "/ai/{id}.json": {
+      "get": {
+        "summary": "AI page, machine copy",
+        "x-status": "planned",
+        "responses": {
+          "501": {
+            "description": "Not built in 0.1.0"
+          }
+        }
+      }
+    },
+    "/v1/ai/context": {
+      "get": {
+        "summary": "AI context",
+        "x-status": "planned",
+        "responses": {
+          "501": {
+            "description": "Not built in 0.1.0"
+          }
+        }
+      }
+    },
+    "/v1/ai/notes": {
+      "post": {
+        "summary": "AI notes",
+        "x-status": "planned",
+        "responses": {
+          "501": {
+            "description": "Not built in 0.1.0"
+          }
+        }
+      }
+    },
+    "/v1/team/tickets": {
+      "get": {
+        "summary": "Team list (needs team login; fails closed until the Access check exists)",
+        "x-status": "built",
+        "parameters": [
+          {
+            "name": "product",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "new",
+                "seen",
+                "done"
+              ]
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamList"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/team/tickets/{ticket}": {
+      "get": {
+        "summary": "Team detail (added; product query is required)",
+        "x-status": "built",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "product",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Team: mark seen or done, write a reply",
+        "x-status": "built",
+        "parameters": [
+          {
+            "name": "ticket",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "product",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "status"
+                ],
+                "properties": {
+                  "status": {
+                    "enum": [
+                      "seen",
+                      "done"
+                    ]
+                  },
+                  "team_note": {
+                    "type": "string",
+                    "maxLength": 500
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "ok"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "signature": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "x-mpc-sig",
+        "description": "HMAC-SHA256(secret, method + \"\\n\" + path + \"\\n\" + ts + \"\\n\" + nonce + \"\\n\" + sha256(body)); time gap at most 300 s; nonce used once"
+      }
+    },
+    "parameters": {
+      "instance": {
+        "name": "x-mpc-instance",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      },
+      "ts": {
+        "name": "x-mpc-ts",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^\\d{9,12}$"
+        }
+      },
+      "nonce": {
+        "name": "x-mpc-nonce",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        }
+      },
+      "sig": {
+        "name": "x-mpc-sig",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "assertion": {
+        "name": "x-mpc-assertion",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "error",
+          "message"
+        ],
+        "properties": {
+          "error": {
+            "enum": [
+              "bad_request",
+              "bad_signature",
+              "no_assertion",
+              "no_team_login",
+              "origin",
+              "role",
+              "not_found",
+              "idempotency_conflict",
+              "too_large",
+              "bad_type",
+              "rate",
+              "try_later"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "field": {
+            "type": "string"
+          },
+          "retry_after": {
+            "type": "integer"
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": [
+          "ok",
+          "core",
+          "time"
+        ],
+        "properties": {
+          "ok": {
+            "type": "boolean"
+          },
+          "core": {
+            "type": "string"
+          },
+          "time": {
+            "type": "integer"
+          }
+        }
+      },
+      "Version": {
+        "type": "object",
+        "required": [
+          "core",
+          "api",
+          "min_instance"
+        ],
+        "properties": {
+          "core": {
+            "type": "string"
+          },
+          "api": {
+            "type": "string"
+          },
+          "min_instance": {
+            "type": "string"
+          }
+        }
+      },
+      "TicketIn": {
+        "type": "object",
+        "required": [
+          "option"
+        ],
+        "properties": {
+          "option": {
+            "enum": [
+              "help_more",
+              "suggest",
+              "stuck"
+            ]
+          },
+          "type": {
+            "enum": [
+              "option",
+              "feature",
+              "wording",
+              null
+            ],
+            "nullable": true
+          },
+          "topic": {
+            "type": "string",
+            "nullable": true
+          },
+          "screen": {
+            "type": "string"
+          },
+          "screen_label": {
+            "type": "string",
+            "maxLength": 60
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 600
+          },
+          "screenshot_id": {
+            "type": "string",
+            "nullable": true
+          },
+          "role": {
+            "enum": [
+              "organizer",
+              "co-organizer"
+            ]
+          },
+          "client": {
+            "type": "object",
+            "properties": {
+              "w": {
+                "type": "integer"
+              },
+              "h": {
+                "type": "integer"
+              },
+              "ua_class": {
+                "enum": [
+                  "mobile",
+                  "desktop"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "TicketOut": {
+        "type": "object",
+        "required": [
+          "ticket",
+          "status_token",
+          "erase_at"
+        ],
+        "properties": {
+          "ticket": {
+            "type": "string"
+          },
+          "status_token": {
+            "type": "string"
+          },
+          "erase_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TicketStatus": {
+        "type": "object",
+        "required": [
+          "ticket",
+          "status",
+          "team_note",
+          "updated"
+        ],
+        "properties": {
+          "ticket": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "new",
+              "seen",
+              "done"
+            ]
+          },
+          "team_note": {
+            "type": "string"
+          },
+          "updated": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "TeamList": {
+        "type": "object",
+        "required": [
+          "items",
+          "cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "cursor": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      }
+    }
+  }
+}

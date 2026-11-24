@@ -1,0 +1,12 @@
+{
+  "name": "moneypenny-chat",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Moneypenny Chat: Need help, Suggest an option or feature, Stuck: tell where.",
+  "scripts": {
+    "scan": "bun scripts/secrets-scan.mjs",
+    "test": "bun scripts/secrets-scan.mjs && bun test",
+    "test:core": "cd core && bun test"
+  }
+}
