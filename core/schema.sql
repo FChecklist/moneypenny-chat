@@ -88,3 +88,6 @@ CREATE TABLE IF NOT EXISTS ai_note (
   PRIMARY KEY (link_id, n)
 );
 CREATE TABLE IF NOT EXISTS ai_call_log (link_id TEXT NOT NULL, at INTEGER NOT NULL, method TEXT NOT NULL, path_class TEXT NOT NULL, code INTEGER NOT NULL);
+-- The hourly sweep finds links by expiry and their calls by link id (0.4.2).
+CREATE INDEX IF NOT EXISTS ai_link_expires ON ai_link (expires);
+CREATE INDEX IF NOT EXISTS ai_call_log_link ON ai_call_log (link_id);

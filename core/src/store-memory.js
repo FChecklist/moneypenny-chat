@@ -56,8 +56,9 @@ export function memoryStore() {
       mailq = mailq.filter((m) => !(m.instance === instance && m.number === number));
       erasure.push({ ticket: number, instance, erased_at: now }); return true;
     },
+    // Every link whose time is up goes, with its notes and call log: a link made for a ticket as well as one made without (privacy rule: 24 hours at most).
     async eraseExpiredLinks(now) {
-      const ids = links.filter((l) => l.ticket == null && l.expires <= now).map((l) => l.id);
+      const ids = links.filter((l) => l.expires <= now).map((l) => l.id);
       links = links.filter((l) => !ids.includes(l.id)); notes = notes.filter((n) => !ids.includes(n.link_id)); calls = calls.filter((c) => !ids.includes(c.link_id)); return ids.length;
     },
     async expireIdem(now) { for (const [k, v] of idem) if (v.expires <= now) idem.delete(k); },
