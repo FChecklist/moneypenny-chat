@@ -179,3 +179,25 @@ test('round 6 widget output has no tick box: no aria-checked, no aria-pressed an
   for (const n of seen) { expect(n.tag).not.toBe('input'); expect(n.attrs?.['aria-checked']).toBeUndefined(); expect(n.attrs?.['aria-pressed']).toBeUndefined(); }
   for (const src of [readFileSync(new URL('../widget/widget.js', import.meta.url), 'utf8'), readFileSync(new URL('../widget/model.js', import.meta.url), 'utf8')]) expect(src).not.toMatch(/aria-checked|aria-pressed|createElement\(['"]input['"]|<input/i);
 });
+
+// ---- 0.4.2: found by the real-browser tests (tests/browser). The fake fetch above hid both of these.
+import { parseKey } from '../src/idem.js';
+test('0.4.2 the idempotency key the widget makes is a UUID the core accepts (32 plain hex characters were refused with bad_request on every send)', async () => {
+  const keys = []; const fetchFn = async (u, init) => { keys.push(init.headers['idempotency-key']); return new Response(JSON.stringify({ ticket: 'T-0001', status_token: 't' }), { status: 201 }); };
+  const api = makeApi({ fetchFn, sleep: async () => {} }); await api.send('/v1/tickets', { n: 1 }); await api.send('/v1/tickets', { n: 2 });
+  expect(keys.length).toBe(2); expect(keys[0]).not.toBe(keys[1]);
+  for (const k of keys) { expect(k).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/); expect(parseKey(k)).toBe(k); }
+  const real = crypto.randomUUID; crypto.randomUUID = undefined; // an old browser or a page that is not secure: the hand-made version 4 id is still a UUID
+  try { const fk = []; const a2 = makeApi({ fetchFn: async (u, init) => { fk.push(init.headers['idempotency-key']); return new Response('{}', { status: 201 }); }, sleep: async () => {} }); await a2.send('/v1/tickets', { n: 3 }); expect(parseKey(fk[0])).toBe(fk[0]); } finally { crypto.randomUUID = real; }
+});
+test('0.4.2 Copy link gives the instance call the status token of the ticket this page sent (the only proof it is the person\'s own); before a send there is no ticket and no token', async () => {
+  const asked = [];
+  const fetchFn = async (u, init) => new Response(JSON.stringify({ ticket: 'T-0009', status_token: 'tok-77' }), { status: 201 });
+  const m = mount({ api: makeApi({ fetchFn, sleep: async () => {} }), aiLink: async (k, o) => { asked.push([k, o]); return 'https://p.example/ai/1?k=x'; }, clipboard: { writeText: async () => {} } }); m.w.open();
+  m.w.act('go:help'); m.w.act('topic:a-topic'); await m.buttons().find((b) => b.textContent === 'Copy link').click(); await new Promise((r) => setTimeout(r, 5));
+  expect(asked[0][0]).toBe('help'); expect(asked[0][1].ticket).toBeFalsy(); expect(asked[0][1].token).toBeFalsy(); // a help answer: nothing sent yet, a link for the screen only
+  for (const id of ['home', 'go:stuck', 'where:here', 'stuck:s1', 'next']) m.w.act(id); await m.w.act('send');
+  await m.buttons().find((b) => b.textContent === 'Copy link').click(); await new Promise((r) => setTimeout(r, 5));
+  expect(asked[1][0]).toBe('stuck'); expect(asked[1][1]).toEqual({ ticket: 'T-0009', topic: 's1', token: 'tok-77' });
+  expect(makeApi({ fetchFn }).token()).toBeNull(); // a fresh page has no token
+});
