@@ -1,5 +1,12 @@
 # Moneypenny Chat changelog
 
+## 0.3.0 - 25 Nov 2026 - C7 to C9: widget and three product instances
+- Widget (S-051 to S-059): `core/widget/` (`widget.js`, `model.js`, `api.js`, `widget.css.js`). Shadow root, three buttons on home, options 1 to 3, notice line with a Terms link (no tick box), standard AI line with Copy link, send with idempotency key and retry, Check status. No cookies, no storage. Keyboard and screen reader: dialog role, labelled boxes, focus on the title, Escape closes.
+- Screenshot hook: `capture()` option on the widget returns a picture; nothing is sent until Send, then the picture goes first. The capture screens themselves (spec C8: capture library, masking, editor) are not built.
+- Instances (`instances/`): `lib/proxy.js` is the instance server logic (origin check, role from the product server, signing, forward to core, AI link). `corporatetambola`, `townhall-records`, `veridian-aios` hold `instance.json` and `strings.json` only. One instance per product, no data shared. Test double of a product server in `instances/tests/`.
+- Help answers are empty (`answer: null`) until the owner writes them. The widget says "No answer is written yet."
+- Tests: `core/tests/widget.test.mjs`, `instances/tests/instances.test.mjs`.
+
 ## 0.2.0 - 25 Nov 2026 - C4 to C6: screenshots, team e-mail and login, AI links
 - Screenshots (S-026 to S-033): `POST /v1/screenshots` (png, jpeg, webp; first bytes must match; up to 2 MB; 10 per hour per address). Files go to the private bucket `mpc-shots` under `<instance>/<random id>`. One file per ticket. A file no ticket uses is erased after 1 hour. A ticket may carry `screenshot_id`. Team can read the file of one ticket (login only). No public URL.
 - Erase (S-030): hourly sweep (cron) erases due files and tickets with their notes, call log and mail queue; `erasure_log` keeps only ticket, instance and time. Team can use Erase now (`PATCH` with `{"erase":true}`).

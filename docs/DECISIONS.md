@@ -111,3 +111,17 @@ Built in this run: screenshots (S-026 to S-033), team e-mail and list (S-034 to 
 - **Product calls on the AI page** come from the optional `ai_calls` list in the instance record. They are not checked against any real product API. The page names no payee. Payments are only by a person, through Moneypenny credits; a payee name must come from the payee record when a payment screen is built.
 - **DNT and GPC.** The instance must forward both headers. Rate-limit counters (hashed address, rotated daily) and audit rows are not side records.
 - **`wrangler` text imports.** `team/*.html`, `team/app.js` and `templates/ai-page.md` are imported as text with `with { type: 'text' }` and a `[[rules]]` entry. Tests run in bun. The bundling by wrangler was not run here.
+
+## C7 to C9 notes (version 0.3.0)
+Not confirmed by the owner. Choices and accepted limits:
+- **Order.** The task asked for widget, corporatetambola wiring, then the two other instances. The spec's own C8 (screenshot capture screens, S-060 to S-067) was not built; only the `capture()` hook exists. The spec's C9 and C10 were built as instance files plus one shared `instances/lib/proxy.js`, not as a template repo or separate repos.
+- **No browser ran.** Widget tests use a small fake DOM and the pure screen model. "Product CSS cannot reach it" is shown only by structure (shadow root, style inside it, nothing in the light DOM). Contrast, 44 px and keyboard walk were not checked in a real browser. The widget file is an ES module; bundling and serving it at `/mpc/widget.js` is not built.
+- **Terms link.** The Terms page URL of each product is not known. `terms_url` is the product's home origin for now. Owner to give the real Terms page.
+- **Origins.** Taken from the ledger: corporatetambola `home.` and `console.`, townhall-records `townhall-records.com`, veridian-aios `veridian-aios.com` and `app.`. Owner to confirm.
+- **Route table is empty** for all three. Owners supply the screen names (I-answer on routes). Until then the label is "This screen" and "Another screen" is hidden.
+- **Topic lists.** corporatetambola follows the old starter entries; townhall-records and veridian-aios lists are PROPOSED in the spec and not confirmed (S-077, S-081 wait for the owner). Help answers are `null`: no answer text, price or policy is made up.
+- **Role map.** corporatetambola maps `host` to `co-organizer`. townhall-records does the same as a guess. veridian-aios maps only `organizer`. Product role names are unchecked.
+- **Proxy.** Roles come from the product server session, never from the page. The page role in a ticket body is replaced. Sessions are bearer tokens in the test double; the real products' session check is not written (adapter `session()` is an interface only). No Worker entry or `wrangler.toml` for instances; nothing was deployed.
+- **AI link scopes** from the widget are read only (`read_event`, plus `read_ticket` for a problem). An AI may do everything but pay; wider scopes need the organizer to approve on the AI page later. Payments are not part of this build; the money flag stays off.
+- **Retries.** The widget retries 2 times on network faults and 502, 503, 504 with the same key. A 429 is not retried.
+- **Status token** lives in memory only; after a page reload "Check status" has nothing to read.

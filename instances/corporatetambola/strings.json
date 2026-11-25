@@ -1,0 +1,57 @@
+{
+  "terms_url": "https://home.corporatetambola.com/",
+  "help_topics": [
+    {
+      "id": "game-price",
+      "label": "Price of a game",
+      "answer": null
+    },
+    {
+      "id": "create-game",
+      "label": "Create a game",
+      "answer": null
+    },
+    {
+      "id": "invite-players",
+      "label": "Invite players",
+      "answer": null
+    },
+    {
+      "id": "refund-policy",
+      "label": "Refund and cancel",
+      "answer": null
+    },
+    {
+      "id": "add-co-organizer",
+      "label": "Add a co-organizer",
+      "answer": null
+    }
+  ],
+  "stuck": [
+    {
+      "id": "link-broken",
+      "label": "A link does not work"
+    },
+    {
+      "id": "players-cannot-join",
+      "label": "Players cannot join"
+    },
+    {
+      "id": "log-in",
+      "label": "Log in"
+    },
+    {
+      "id": "pay-or-credits",
+      "label": "Pay or credits"
+    },
+    {
+      "id": "game-will-not-start",
+      "label": "Game will not start"
+    },
+    {
+      "id": "prizes-winners",
+      "label": "Prizes or winners"
+    }
+  ],
+  "screens": []
+}
