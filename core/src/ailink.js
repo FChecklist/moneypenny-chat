@@ -7,6 +7,7 @@ import { audit } from './audit.js';
 import { sideRecord } from './privacy.js';
 import { aiError, aiJson, pageModel, pageResponse } from './aipage.js';
 import { AI_NEXT, FALLBACK_SCREEN } from './strings.js';
+import { checkNoteText } from './noterules.js';
 
 export const LINK_LIMITS = { perHour: 5, notes: 20, noteChars: 800, ttlDefault: 7200, ttlMax: 86400, ttlMin: 60 };
 export const NOTE_TYPES = ['plan', 'step', 'done', 'blocked'];
@@ -90,13 +91,9 @@ export async function aiContext(ctx, req) {
   const body = { ticket: t ? { number: t.number, option: t.option, type: t.type, topic: t.topic, status: t.status, text: t.text } : null, screen: l.screen, scopes, expires: iso(l.expires), approved: !!l.approved, calls: inst.ai_calls || [] };
   return logged(ctx, req, l, 'GET', 'ai/context', 200, aiJson(body));
 }
-// A note must not ask for payments, identity changes or deleting (all note types), must carry no link to another site, and no secret-looking token.
-const FORBIDDEN_WORDS = ['pay', 'pays', 'paid', 'paying', 'payments?', 'payout', 'payouts', 'razor\\w*', 'credits?', 'passwords?', 'passcodes?', 'charge', 'charges', 'charged', 'charging', 'purchase', 'purchases', 'purchased', 'buy', 'buys', 'bought',
-  'delete', 'deletes', 'deleted', 'deleting', 'erase', 'erased', 'erases', 'erasing', 'remove', 'removes', 'removed', 'removing', 'wipe', 'wipes', 'wiped', 'wiping', 'purge', 'purges', 'purged', 'purging', 'destroy', 'destroys', 'destroyed', 'destroying',
-  'refund', 'refunds', 'refunded', 'refunding', 'reimburse', 'reimburses', 'reimbursed', 'reimbursing', 'cancel', 'cancels', 'canceled', 'cancelled', 'canceling', 'cancelling', 'cancellation',
-  'transfer', 'transfers', 'transferred', 'transferring'];
-// A word list on free text is only a second layer. The real guard is the scope list (scopes.js) checked on every call; see docs/DECISIONS.md.
-const FORBIDDEN = new RegExp(`\\b(?:${FORBIDDEN_WORDS.join('|')})\\b|\\b(?:change|changes|changed|changing|update|updates|updated|updating|reset|resets|replace|replaces|replaced|replacing)\\s+(?:the\\s+|their\\s+|a\\s+|an\\s+|his\\s+|her\\s+)?(?:e-?mails?|passwords?)\\b`, 'i'), LINKY = /https?:\/\/|\bwww\./i, SECRETY = /\bmpk_[A-Za-z0-9]{8,}|[A-Za-z0-9_-]{32,}/;
+// A note must not ask for payments, identity changes or deleting, must carry no link to another site, and no secret-looking token.
+// The word check is in noterules.js (0.4.2): strict for plan and step, precise for the reports done and blocked. It is a second layer; the scope list is the real guard (docs/DECISIONS.md).
+const LINKY = /https?:\/\/|\bwww\./i, SECRETY = /\bmpk_[A-Za-z0-9]{8,}|[A-Za-z0-9_-]{32,}/;
 export async function aiNote(ctx, req, raw) {
   const b = await bearer(ctx, req); if (b.err) return b.err;
   const { l, now } = b, fin = (code, status, res) => logged(ctx, req, l, 'POST', 'ai/notes', status, res);
@@ -108,7 +105,7 @@ export async function aiNote(ctx, req, raw) {
   const text = p.text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim(), n = [...text].length;
   if (n > LINK_LIMITS.noteChars) return fin('big', 413, aiError('too_large'));
   if (n < 1 || LINKY.test(text) || SECRETY.test(text)) return fin('bad', 422, aiError('bad_note'));
-  if (FORBIDDEN.test(text)) return fin('forbidden', 403, aiError('forbidden_action'));
+  if (checkNoteText(p.type, text)) return fin('forbidden', 403, aiError('forbidden_action'));
   if ((p.type === 'step' || p.type === 'done') && !l.approved && JSON.parse(l.scopes).some((s) => WRITE_SCOPES.includes(s))) return fin('plan', 409, aiError('plan_not_approved'));
   const left = Math.max(1, Math.ceil((l.expires - now) / 1000));
   const sec = await ctx.limiter(`an1:${l.id}:${Math.floor(now / 1000)}`, { op: 'take', delta: 1, cap: 1, ttl: 5 }); // 1 per second
