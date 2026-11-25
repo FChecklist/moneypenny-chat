@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS shot (
   erase_at INTEGER NOT NULL,       -- unattached: created + 1 hour
   sess_hash TEXT                   -- sha256 of instance|shot|session of the uploader: only that session may attach the file (0.4.2). A row without it can never be claimed.
 );
--- A database made from the 0.4.1 schema needs this once: ALTER TABLE shot ADD COLUMN sess_hash TEXT;  (nothing is deployed yet, so no live database needs it)
+-- A database made from the 0.4.1 schema needs ALTER TABLE shot ADD COLUMN sess_hash TEXT once (nothing is deployed yet, so no live database needs it)
 CREATE INDEX IF NOT EXISTS shot_erase ON shot (erase_at);
 -- Every state change leaves one row here. No text, no person.
 CREATE TABLE IF NOT EXISTS audit (
