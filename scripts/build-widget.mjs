@@ -1,6 +1,7 @@
 // C10: builds one file per instance: instances/<id>/dist/widget.js (one ES module, no other file needed).
 // Usage: bun scripts/build-widget.mjs [id ...] [--out <dir>]   (no id: every instance)
 import { readFileSync, readdirSync, mkdirSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { checkConfig } from '../instances/lib/proxy.js';
 const root = new URL('../', import.meta.url);
 const rd = (id, f) => JSON.parse(readFileSync(new URL(`instances/${id}/${f}`, root), 'utf8'));
@@ -11,7 +12,7 @@ export const instanceIds = () => readdirSync(new URL('instances/', root), { with
 export async function buildBundle(config, strings) {
   checkConfig(config, strings);
   const inst = { id: config.id, name: config.name, brand: config.brand || null, routes: config.routes || {}, strings };
-  const r = await Bun.build({ entrypoints: [new URL('core/widget/boot.js', root).pathname], target: 'browser', format: 'esm', minify: true, define: { __MPC_INSTANCE__: JSON.stringify(inst) } });
+  const r = await Bun.build({ entrypoints: [fileURLToPath(new URL('core/widget/boot.js', root))], target: 'browser', format: 'esm', minify: true, define: { __MPC_INSTANCE__: JSON.stringify(inst) } });
   if (!r.success || r.outputs.length !== 1) throw new Error('build failed: ' + r.logs.join(' '));
   return await r.outputs[0].text();
 }

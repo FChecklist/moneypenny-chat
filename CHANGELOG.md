@@ -5,6 +5,7 @@
 - Erase cron (`scheduled`): only `DB` is needed. A missing `DB` throws, so the cron run shows as failed. A missing `LIMITS` no longer skips the erase (the sweep does not use the limiter).
 - Tests: the capture navigator test is self-contained (it defines a known navigator and fails on `delete globalThis.navigator`); the note tables have 78 wordings (41 refused, 37 passed); scheduled tests for a missing `DB` and a missing `LIMITS`; the cron test with no `SHOTS` binding in `link-erase.test.js`. A test that passed on 0.4.3 is labelled "coverage only".
 - Version: 0.4.4 (round 9 on the head of PR 2).
+- Tooling only, no product change: `scripts/build-widget.mjs` and the S-049 test read their folder with `fileURLToPath`, so the whole suite also runs on Windows (424 of 424 there). Nothing shipped changes.
 
 ## 0.4.3 - 25 Nov 2026 - round 8 fixes, from two independent reviews of 0.4.2
 - Erase cron (`scheduled` in `core/src/index.js`): it needs only `DB` and `LIMITS` now. Before, a missing picture bucket (`SHOTS`) stopped the whole run, so expired links, notes, call logs, idempotency rows and tickets stayed past their time. Without `SHOTS` only the picture steps are skipped: a due ticket that still holds a picture waits for the next run (its row is the only record of the file), and every other due ticket is erased. A missing `DB` or `LIMITS` now writes a clear warning (`console.warn`) instead of returning without a sign. Tests: `core/tests/scheduled.test.js`.
