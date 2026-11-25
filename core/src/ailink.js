@@ -1,6 +1,6 @@
 // C6: AI links. S-043 create and revoke, S-046 context, S-047 notes. The key `k` is never stored: only its SHA-256 hash.
 import { randomToken, sha256hex, timingEqual } from './crypto.js';
-import { checkScopes, WRITE_SCOPES } from './scopes.js';
+import { checkScopes, withinScopes, READ_ONLY_SCOPES, CLASS_SCOPES, WRITE_SCOPES } from './scopes.js';
 import { cleanPath, segmentsFromRoutes, screenLabel } from './path.js';
 import { scrub } from './scrub.js';
 import { audit } from './audit.js';
@@ -21,6 +21,7 @@ export async function createLink(ctx, inst, { b, a, token }) {
   if (b.ticket !== undefined && b.ticket !== null && !(typeof b.ticket === 'string' && TICKET.test(b.ticket))) return bad('ticket');
   const ticket = b.ticket ?? null;
   const sc = checkScopes(b.scopes); if (!sc.ok) return bad('scopes'); // payment, identity, delete and anything else outside the list: refused
+  if (!ticket && !withinScopes(sc.value, READ_ONLY_SCOPES)) return bad('scopes'); // no ticket: read-only scopes only
   if (typeof b.key_hash !== 'string' || !HASH.test(b.key_hash)) return bad('key_hash');
   if (typeof b.product_key_id !== 'string' || !KEYID.test(b.product_key_id)) return bad('product_key_id');
   const ttl = b.ttl_s ?? LINK_LIMITS.ttlDefault;
@@ -29,6 +30,7 @@ export async function createLink(ctx, inst, { b, a, token }) {
   if (ticket) { // sequential numbers must not let one organizer read another's ticket: the status token of that ticket is required
     const row = await ctx.store.getTicket(inst.id, ticket, now);
     if (!row || !token || !timingEqual(await sha256hex(token), row.token_hash)) return { error: 'not_found' };
+    if (!withinScopes(sc.value, CLASS_SCOPES[row.option] || READ_ONLY_SCOPES)) return bad('scopes'); // not more than the ticket class allows
   }
   if (await ctx.store.getLinkByHash(b.key_hash)) return bad('key_hash'); // one key, one link
   const sh = await sessHash(inst, a.sess), lk = `al:${sh.slice(0, 16)}:h${Math.floor(now / 3600e3)}`;
@@ -88,8 +90,8 @@ export async function aiContext(ctx, req) {
   const body = { ticket: t ? { number: t.number, option: t.option, type: t.type, topic: t.topic, status: t.status, text: t.text } : null, screen: l.screen, scopes, expires: iso(l.expires), approved: !!l.approved, calls: inst.ai_calls || [] };
   return logged(ctx, req, l, 'GET', 'ai/context', 200, aiJson(body));
 }
-// A note must not ask for payments, identity changes or deleting (plan and step notes), must carry no link to another site, and no secret-looking token.
-const FORBIDDEN = /\b(pay|pays|paid|payments?|razor\w*|credits?|passwords?|delete|deleting|erase)\b/i, LINKY = /https?:\/\/|\bwww\./i, SECRETY = /\bmpk_[A-Za-z0-9]{8,}|[A-Za-z0-9_-]{32,}/;
+// A note must not ask for payments, identity changes or deleting (all note types), must carry no link to another site, and no secret-looking token.
+const FORBIDDEN = /\b(pay|pays|paid|payments?|razor\w*|credits?|passwords?|delete|deletes|deleted|deleting|erase|erased|erases)\b/i, LINKY = /https?:\/\/|\bwww\./i, SECRETY = /\bmpk_[A-Za-z0-9]{8,}|[A-Za-z0-9_-]{32,}/;
 export async function aiNote(ctx, req, raw) {
   const b = await bearer(ctx, req); if (b.err) return b.err;
   const { l, now } = b, fin = (code, status, res) => logged(ctx, req, l, 'POST', 'ai/notes', status, res);
@@ -101,7 +103,7 @@ export async function aiNote(ctx, req, raw) {
   const text = p.text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim(), n = [...text].length;
   if (n > LINK_LIMITS.noteChars) return fin('big', 413, aiError('too_large'));
   if (n < 1 || LINKY.test(text) || SECRETY.test(text)) return fin('bad', 422, aiError('bad_note'));
-  if ((p.type === 'plan' || p.type === 'step') && FORBIDDEN.test(text)) return fin('forbidden', 403, aiError('forbidden_action'));
+  if (FORBIDDEN.test(text)) return fin('forbidden', 403, aiError('forbidden_action'));
   if ((p.type === 'step' || p.type === 'done') && !l.approved && JSON.parse(l.scopes).some((s) => WRITE_SCOPES.includes(s))) return fin('plan', 409, aiError('plan_not_approved'));
   const left = Math.max(1, Math.ceil((l.expires - now) / 1000));
   const sec = await ctx.limiter(`an1:${l.id}:${Math.floor(now / 1000)}`, { op: 'take', delta: 1, cap: 1, ttl: 5 }); // 1 per second

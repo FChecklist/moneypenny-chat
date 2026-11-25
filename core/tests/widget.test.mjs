@@ -84,6 +84,17 @@ test('S-055 option 3: page label shown, other screen picked from the list, stuck
   expect(step(other, { id: 'next' }).screen).toBe('stuck.write');
   expect(ticketBody(other, cfg(), '/').topic).toBeNull();
 });
+test('round 5: every screen renders with no checkbox or radio (element, type or role); null terms_url hides the link', () => {
+  const paths = [[], ['go:help'], ['go:help', 'topic:a-topic'], ['go:suggest'], ['go:suggest', 'type:option'], ['go:stuck'], ['go:stuck', 'where:here'], ['go:stuck', 'where:here', 'stuck:s1'], ['go:stuck', 'where:here', 'stuck:s1', 'next']];
+  for (const x of [{}, { strings: { ...strings, terms_url: null } }]) for (const p of paths) {
+    const m = mount(x); m.w.open(); for (const id of p) m.w.act(id);
+    const els = [m.w.panel, ...m.w.panel.all()];
+    expect(els.length).toBeGreaterThan(1);
+    for (const e of els) { expect(['checkbox', 'radio']).not.toContain(e.type); expect(['checkbox', 'radio']).not.toContain(e.attrs?.type); expect(['checkbox', 'radio']).not.toContain(e.attrs?.role); }
+    if (x.strings && p.length >= 2 && m.texts().includes('Sending shares')) { expect(m.w.panel.all('a').length).toBe(0); expect(m.texts()).not.toContain('Read the Terms'); }
+  }
+  const n = view(go(initial(), 'go:suggest', 'type:option'), cfg({ strings: { ...strings, terms_url: null } })).controls.find((c) => c.kind === 'notice'); expect(n.link).toBeNull();
+});
 test('S-056 notice line with a Terms link on 2.2 and 3.5; no checkbox anywhere; no tick box words', () => {
   const n = (st) => view(st, cfg()).controls.find((c) => c.kind === 'notice');
   const s2 = go(initial(), 'go:suggest', 'type:option'), s3 = go(initial(), 'go:stuck', 'where:here', 'stuck:s1', 'next');
@@ -91,7 +102,7 @@ test('S-056 notice line with a Terms link on 2.2 and 3.5; no checkbox anywhere; 
   const m = mount(); m.w.open(); m.w.act('go:suggest'); m.w.act('type:option');
   const a = m.w.panel.all('a'); expect(a.length).toBe(1); expect(a[0].attrs.rel || a[0].rel).toBeTruthy(); expect(a[0].href).toBe('https://p.example/terms'); expect(m.texts()).toContain(NOTICE);
   expect(m.w.panel.all().filter((e) => e.tag === 'input' && e.type === 'checkbox').length).toBe(0);
-  for (const f of readdirSync(new URL('../widget', import.meta.url))) expect(readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8')).not.toMatch(/checkbox|type\s*=\s*['"]?radio/i);
+  for (const f of readdirSync(new URL('../widget', import.meta.url))) expect(readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, '$1')).not.toMatch(/checkbox|type\s*=\s*['"]?radio/i);
   expect(view(s2, cfg()).controls.find((c) => c.kind === 'privacy').text).toBe(PRIVACY);
 });
 test('S-057 the standard AI line is exact on 1.2, 2.4 and 3.6, each with Copy link; not on home', () => {

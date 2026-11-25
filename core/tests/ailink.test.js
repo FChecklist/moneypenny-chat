@@ -52,10 +52,30 @@ for (const store of Object.keys(STORES)) {
     for (let i = 1; i <= 5; i++) expect((await post(i, 'sess-rate-1')).status).toBe(201);
     const r = await post(6, 'sess-rate-1'); expect(r.status).toBe(429); expect(Number(r.headers.get('retry-after'))).toBeGreaterThan(0); expect((await post(7, 'sess-rate-2')).status).toBe(201);
   });
+  test(`[${store}] round 5: no ticket means read-only scopes; a ticket class caps the scopes`, async () => {
+    const e = E(); let i = 0; const post = (b, o) => e.call('POST', '/v1/ai-links', { key_hash: String(++i % 10).repeat(64) + String(i).padStart(2, '0').repeat(0), product_key_id: 'pk', ...b }, { sess: 'sess-r5-' + i + 'abcd', ...o });
+    for (const s of [['edit_event'], ['invite'], ['create_event'], ['report', 'invite']]) { const r = await post({ ticket: null, scopes: s }); expect(r.status, JSON.stringify(s)).toBe(400); expect((await r.json()).field).toBe('scopes'); }
+    expect((await post({ scopes: ['edit_event'] })).status).toBe(400); // ticket left out
+    expect((await post({ ticket: null, scopes: ['read_ticket', 'read_event', 'report'] })).status).toBe(201);
+    for (const f of ['ticket-help.json', 'ticket-suggest.json']) {
+      const tk = await (await e.call('POST', '/v1/tickets', fixture(f), { sess: 'sess-r5-t' + f.length })).json();
+      const r = await post({ ticket: tk.ticket, scopes: ['read_ticket', 'edit_event'] }, { token: tk.status_token, sess: 'sess-r5-t' + f.length }); expect(r.status, f).toBe(400); expect((await r.json()).field).toBe('scopes');
+      expect((await post({ ticket: tk.ticket, scopes: ['read_ticket', 'report'] }, { token: tk.status_token, sess: 'sess-r5-t' + f.length })).status).toBe(201);
+    }
+    expect((await link(e, { scopes: ['read_ticket', 'edit_event', 'invite', 'report'], k: 'mpk_' + 'z'.repeat(40), sess: 'sess-r5-stuck' })).r.status).toBe(201); // stuck ticket may hold write scopes
+  });
+  test(`[${store}] round 5: done and blocked notes are checked for forbidden actions`, async () => {
+    for (const type of ['done', 'blocked']) {
+      const e = E(); await link(e, { scopes: ['read_ticket', 'report'] });
+      for (const t of ['I deleted the game.', 'I paid the bill.', 'Razorpay was used.']) { e.clock.t += 1000; const r = await note(e, K, type, t); expect(r.status, type + t).toBe(403); expect(await codeOf(r)).toBe('forbidden_action'); }
+      e.clock.t += 1000; expect((await note(e, K, type, 'All good.')).status).toBe(201);
+    }
+  });
   test(`[${store}] S-048 scopes: payment, identity, delete and anything else outside the list are refused; all six listed scopes are accepted`, async () => {
     const e = E(); let i = 0; const post = (scopes) => e.call('POST', '/v1/ai-links', { scopes, key_hash: String((++i) % 10).repeat(64), product_key_id: 'pk' }, { sess: 'sess-sc-' + Math.floor(i / 4) + 'abcd' });
     for (const s of [['payment'], ['identity'], ['delete'], ['report', 'payment'], ['send_notice'], ['Report'], [''], [], 'report', null, ['report', 'report'], [5], SCOPES.concat(['x'])]) { const r = await post(s); expect(r.status, JSON.stringify(s)).toBe(400); expect((await r.json()).field).toBe('scopes'); }
-    expect((await post([...SCOPES])).status).toBe(201);
+    expect((await post([...SCOPES])).status).toBe(400); // no ticket: write scopes refused (round 5)
+    expect((await link(e, { scopes: [...SCOPES], sess: 'sess-sc-all1' })).r.status).toBe(201); // stuck ticket: all six
     expect(checkScopes(['report', 'read_ticket'])).toEqual({ ok: true, value: ['read_ticket', 'report'] }); expect(SCOPES).toEqual(['read_ticket', 'read_event', 'edit_event', 'create_event', 'invite', 'report']);
   });
   test(`[${store}] S-043 stop: DELETE gives 204, twice 204, then the key is revoked; another session or an unknown id gets 404`, async () => {
@@ -152,7 +172,7 @@ for (const store of Object.keys(STORES)) {
     for (const [name, r] of [['big body', () => e.ai('POST', '/v1/ai/notes', { k: K, body: JSON.stringify({ type: 'step', text: 'x'.repeat(9000) }) })]]) { step(); const x = await r(); expect(x.status, name).toBe(413); }
     for (const body of ['{oops', '[1]', '"x"', '{"type":"step"}', '{"type":"step","text":5}', '{"type":"step","text":"   "}', '{"type":"step","text":"See https://evil.test/x"}', '{"type":"step","text":"Go to www.evil.test"}', '{"type":"step","text":"key mpk_abcdefgh1234"}', `{"type":"step","text":"${'a'.repeat(32)}"}`]) { step(); const x = await e.ai('POST', '/v1/ai/notes', { k: K, body }); expect(x.status, body).toBe(422); }
     for (const text of ['Delete the game', 'Please pay now', 'Use credits', 'Change the password']) { step(); expect((await note(e, K, 'step', text)).status, text).toBe(403); }
-    step(); expect((await note(e, K, 'blocked', 'I could not delete it, a person must do it.')).status).toBe(201); // blocked is how an AI says it
+    step(); expect((await note(e, K, 'blocked', 'I could not finish it, a person must do it.')).status).toBe(201); // blocked is how an AI says it
     const f = E(); await link(f, { scopes: ['read_ticket', 'report'] }); let ok = 0; for (let i = 0; i < 20; i++) { f.clock.t += 1000; if ((await note(f, K, 'step', 'Note ' + i)).status === 201) ok++; }
     expect(ok).toBe(20); f.clock.t += 1000; const r = await note(f, K, 'step', 'Note 21'); expect(r.status).toBe(429); expect((await r.json()).retry_after).toBeGreaterThan(0);
   });

@@ -42,6 +42,7 @@ export function mountWidget(cfg) {
       else i.oninput = () => { st = step(st, { id: c.id, value: i.value }); };
       return w;
     }
+    if (c.kind === 'notice' && !c.link) { const p = doc.createElement('p'); p.className = 'notice'; p.textContent = c.text; return p; }
     if (c.kind === 'notice') { const p = doc.createElement('p'); p.className = 'notice'; const [a, b] = c.text.split(c.link.text); p.append(a); const lk = doc.createElement('a'); lk.href = c.link.href; lk.target = '_blank'; lk.rel = 'noopener noreferrer'; lk.textContent = c.link.text; p.append(lk, b); return p; }
     if (c.kind === 'privacy') { const p = doc.createElement('p'); p.className = 'privacy'; p.textContent = c.text; return p; }
     if (c.kind === 'ailine') {

@@ -116,7 +116,7 @@ Built in this run: screenshots (S-026 to S-033), team e-mail and list (S-034 to 
 Not confirmed by the owner. Choices and accepted limits:
 - **Order.** The task asked for widget, corporatetambola wiring, then the two other instances. The spec's own C8 (screenshot capture screens, S-060 to S-067) was not built; only the `capture()` hook exists. The spec's C9 and C10 were built as instance files plus one shared `instances/lib/proxy.js`, not as a template repo or separate repos.
 - **No browser ran.** Widget tests use a small fake DOM and the pure screen model. "Product CSS cannot reach it" is shown only by structure (shadow root, style inside it, nothing in the light DOM). Contrast, 44 px and keyboard walk were not checked in a real browser. The widget file is an ES module; bundling and serving it at `/mpc/widget.js` is not built.
-- **Terms link.** The Terms page URL of each product is not known. `terms_url` is the product's home origin for now. Owner to give the real Terms page.
+- **Terms link.** The Terms page URL of each product is not known. Round 5: `terms_url` is now `null` in all three instances, and `null` hides the Terms link (a link to the home page is not a Terms page). **Owner must give each product its Terms URL** (a https path ending in `/terms`).
 - **Origins.** Taken from the ledger: corporatetambola `home.` and `console.`, townhall-records `townhall-records.com`, veridian-aios `veridian-aios.com` and `app.`. Owner to confirm.
 - **Route table is empty** for all three. Owners supply the screen names (I-answer on routes). Until then the label is "This screen" and "Another screen" is hidden.
 - **Topic lists.** corporatetambola follows the old starter entries; townhall-records and veridian-aios lists are PROPOSED in the spec and not confirmed (S-077, S-081 wait for the owner). Help answers are `null`: no answer text, price or policy is made up.
@@ -125,3 +125,11 @@ Not confirmed by the owner. Choices and accepted limits:
 - **AI link scopes** from the widget are read only (`read_event`, plus `read_ticket` for a problem). An AI may do everything but pay; wider scopes need the organizer to approve on the AI page later. Payments are not part of this build; the money flag stays off.
 - **Retries.** The widget retries 2 times on network faults and 502, 503, 504 with the same key. A 429 is not retried.
 - **Status token** lives in memory only; after a page reload "Check status" has nothing to read.
+
+## Round 5 notes (version 0.3.1)
+- **Link scopes.** No ticket: read-only scopes only. With a ticket: help and suggest are read-only, stuck may hold every listed scope (the organizer still has to approve the plan before write steps).
+- **Accepted, not defects.** Ticket text is visible to the key holder for 24 hours by design. The screenshot blob stored twice is erased after 1 hour and accepted.
+- **NOT BUILT YET (C10 to C12).**
+  - *C10 widget bundle serving.* Interface: `GET /mpc/widget.js` on each instance returns the built ES module of `core/widget/` (`mountWidget({strings, screenLabel, doc, ...})`), `content-type: text/javascript`, `cache-control: public, max-age=300`, same origin only, no cookies.
+  - *C11 real session adapter per product.* Interface: `product.session(req) -> { role: string, sess: string } | null` (role from the product server session, never the page; `null` = not signed in) and `product.mintKey({ session, scopes, ttl_s }) -> { status, body }`.
+  - *C12 instance Worker entry and `wrangler.toml` per product* wiring the two above into `createInstance`.

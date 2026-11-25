@@ -11,7 +11,7 @@ const chars = (s) => [...s].length;
 // cfg: {strings:{help_topics:[{id,label,answer}], stuck:[{id,label}], screens:[labels], terms_url}, screenLabel}
 export function view(st, cfg) {
   const S = cfg.strings, here = cfg.screenLabel || FALLBACK_SCREEN, label = st.stuckAt === null ? here : S.screens[Number(st.stuckAt)] || FALLBACK_SCREEN;
-  const notice = { kind: 'notice', text: NOTICE, link: { text: 'Terms', href: S.terms_url } };
+  const notice = S.terms_url ? { kind: 'notice', text: NOTICE, link: { text: 'Terms', href: S.terms_url } } : { kind: 'notice', text: NOTICE.replace(' Read the Terms.', ''), link: null }; // no real Terms page: no link
   const privacy = { kind: 'privacy', text: PRIVACY };
   const ai = (hint) => [{ kind: 'ailine', text: STANDARD_AI_LINE, copy: 'Copy link', for: hint }];
   switch (st.screen) {

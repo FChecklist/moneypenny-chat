@@ -23,6 +23,17 @@ function rig(id = 'corporatetambola', { origin } = {}) {
 }
 const TICKET = { option: 'suggest', type: 'feature', text: 'Please add a small timer here', screen: '/console/x' };
 
+test('round 5: instance strings (topics, answers, stuck items) pass the owner string rules, and a slip fails', () => {
+  for (const id of IDS) { const s = rd(id, 'strings.json'); expect(checkStrings(s), id).toEqual([]); expect(checkStrings({ ...s, help_topics: [{ id: 'a', label: 'Set up', answer: 'Open your game.' }] }).length).toBe(1); expect(checkStrings({ ...s, stuck: [{ id: 'a', label: 'My game' }] }).length).toBe(1); }
+});
+test('round 5: terms_url is required: null or a real /terms path; the home page is refused', () => {
+  const { config, strings } = cfgOf('corporatetambola');
+  for (const id of IDS) { const t = rd(id, 'strings.json').terms_url; expect(t === null || /^https:\/\/[^/]+\/(?:[\w.-]+\/)*terms\/?$/.test(t), id).toBe(true); }
+  expect(() => checkConfig(config, { ...strings, terms_url: 'https://home.corporatetambola.com/' })).toThrow();
+  expect(() => checkConfig(config, { ...strings, terms_url: undefined })).toThrow();
+  expect(() => checkConfig(config, { ...strings, terms_url: 'https://home.corporatetambola.com/terms' })).not.toThrow();
+  expect(() => checkConfig(config, { ...strings, terms_url: null })).not.toThrow();
+});
 test('each instance record passes the core schema check, its strings pass the owner rules, and the config check refuses bad input', () => {
   for (const id of IDS) {
     const { config, strings } = cfgOf(id);
@@ -122,5 +133,5 @@ test('co-organizer: the product role "host" is stored as co-organizer; DNT reach
 });
 test('the proxy sets and reads no cookies; the standard line is imported, not copied; version notes exist', () => {
   const src = readFileSync(new URL('../lib/proxy.js', import.meta.url), 'utf8'); expect(src).not.toMatch(/set-cookie|req\.headers\.get\('cookie'\)|document\.cookie/i);
-  expect(src).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.3.0'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.3.0');
+  expect(src).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.3.1'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.3.1');
 });

@@ -18,7 +18,7 @@ const AI_TTL_S = 3600;
 // Refuses a bad config at start, not at the first call.
 export function checkConfig(config, strings) {
   const v = validateInstance(config); if (!v.ok) throw new Error('instance: ' + v.errors.join('; '));
-  if (!strings || !/^https:\/\//.test(strings.terms_url || '')) throw new Error('strings: terms_url must be an https link');
+  if (!strings || !('terms_url' in strings) || (strings.terms_url !== null && !/^https:\/\/[^/?#]+\/(?:[\w.-]+\/)*terms\/?$/.test(strings.terms_url))) throw new Error('strings: terms_url must be a https link ending in /terms, or null');
   const bad = checkStrings(strings); if (bad.length) throw new Error('strings: ' + JSON.stringify(bad));
   for (const k of ['help_topics', 'stuck', 'screens']) if (!Array.isArray(strings[k])) throw new Error('strings: ' + k + ' must be a list');
 }

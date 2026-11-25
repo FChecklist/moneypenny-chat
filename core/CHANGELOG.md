@@ -1,5 +1,11 @@
 # Moneypenny Chat core changelog
 
+## 0.3.1 - 25 Nov 2026 - round 5 fixes
+- AI links: a link with no ticket may hold only read-only scopes (`read_ticket`, `read_event`, `report`); a link with a ticket may not exceed its class (help and suggest: read-only; stuck: all listed scopes). Others are refused with `bad_request`, field `scopes`.
+- AI notes: the forbidden-action check (pay, delete and so on) now runs for done and blocked notes too.
+- Instances: `terms_url` is required in `strings.json`: a https link ending in `/terms`, or `null`. `null` hides the Terms link in the notice. All three are `null` until the owner gives the real page.
+- Tests: instance strings go through the owner string rules; the widget test renders every screen and checks no checkbox or radio element or role.
+
 ## 0.3.0 - 25 Nov 2026 - C7 to C9: widget and three product instances
 - Widget (S-051 to S-059): `core/widget/` (`widget.js`, `model.js`, `api.js`, `widget.css.js`). Shadow root, three buttons on home, options 1 to 3, notice line with a Terms link (no tick box), standard AI line with Copy link, send with idempotency key and retry, Check status. No cookies, no storage. Keyboard and screen reader: dialog role, labelled boxes, focus on the title, Escape closes.
 - Screenshot hook: `capture()` option on the widget returns a picture; nothing is sent until Send, then the picture goes first. The capture screens themselves (spec C8: capture library, masking, editor) are not built.
