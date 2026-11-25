@@ -29,7 +29,7 @@ const REPORT_OK = [
   'Done: the Pay column is sorted by date.',
   'Blocked: the game was already cancelled by the organizer.',
   'Done. I read the screen and wrote down the steps. Nothing was changed.',
-  'Blocked: the Credits page is empty for this account.', 'I did not click Pay.', 'I could not press the Delete button.',
+  'Blocked: the Credits page is empty for this account.', 'I did not click Pay.', 'I could not press the Delete button.', 'I looked at the Cancel button.', 'I read the Delete button label.', 'Done. A person paid the bill.', 'Done: the bill was paid by the organizer.', 'I will not delete anything.',
   'The remove option is missing for co-organizers.',
 ];
 // Reports that must be refused: a claim, a request, intent, a password or credits to be sent, or the provider.
@@ -38,7 +38,7 @@ const REPORT_BAD = [
   'You should refund the order.', 'The game was deleted.', 'Cancelled the game.', 'Please type your password here.', 'Send 500 credits to the account.', 'Please change the password.',
   'I changed the password.', 'Then update their email address.', 'Transfer the credits to a new owner.', 'I removed the player and then wiped the list.', 'You can pay later.',
   'Go ahead and delete it.', 'We purchased more credits.', 'Charge the card now.', "I'll cancel the booking.", 'Done. Razorpay link sent.', 'I am deleting the old games.',
-  'Share the password with me.', 'Blocked, so please remove the player.', 'Click Pay to finish.', 'Press Delete to continue.', 'I clicked Pay.',
+  'Share the password with me.', 'Blocked, so please remove the player.', 'Click Pay to finish.', 'Press Delete to continue.', 'I clicked Pay.', 'I clicked the Delete button.', 'I pressed the Pay button and confirmed.', 'Then I selected Cancel game.',
 ];
 // Plan and step: strict, as before, whole words only.
 const STRICT_BAD = ['Refund the order', 'CANCEL the game', 'Please Remove the player', 'wipe all data', 'purge the list', 'destroy the record', 'transfer the credits to a new owner', 'Transferred it', 'Then change the e-mail on the account', 'change email now', 'update their password', 'reset the password',

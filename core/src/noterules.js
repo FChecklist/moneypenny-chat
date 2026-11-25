@@ -29,7 +29,7 @@ const set = (s) => new Set(s.split(' '));
 const NEG = set('not never no cannot nothing nobody none without unable neither nor');                       // "I did not pay", "nothing was deleted"
 const HAND = set('person people human humans someone somebody organizer organizers co-organizer team owner admin staff support'); // handed to a person: "a person must pay"
 const CLAIM = set('i we was were been has have had got already just successfully');                          // with a past verb: "I paid", "was deleted"
-const REQUEST = set('please kindly lets let now then just ahead click press tap hit select choose confirm approve accept'); // "please pay", "go ahead and delete", "click Pay"
+const REQUEST = set('please kindly lets let now then just ahead click clicked clicking press pressed pressing tap tapped tapping hit select selected selecting choose chose chosen choosing confirm confirmed confirming approve approved approving accept accepted accepting'); // "please pay", "go ahead and delete", "click Pay", "I clicked the Delete button" (acting on it, even a button, counts)
 const SPEAKER = set('i we you');                                                                              // "I will delete", "you should refund"
 const SUBJECT = set('i we you they it he she');                                                               // a subject starts a clause: words before it belong to another clause
 const CONJ = set('and or nor');
