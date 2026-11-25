@@ -1,0 +1,57 @@
+{
+  "terms_url": null,
+  "help_topics": [
+    {
+      "id": "set-up-meeting",
+      "label": "Set up a meeting",
+      "answer": null
+    },
+    {
+      "id": "run-election",
+      "label": "Run an election",
+      "answer": null
+    },
+    {
+      "id": "upload-voter-list",
+      "label": "Upload the voter list",
+      "answer": null
+    },
+    {
+      "id": "take-attendance",
+      "label": "Take attendance",
+      "answer": null
+    },
+    {
+      "id": "write-minutes",
+      "label": "Write the minutes",
+      "answer": null
+    }
+  ],
+  "stuck": [
+    {
+      "id": "cannot-sign-in",
+      "label": "Cannot sign in"
+    },
+    {
+      "id": "upload-failed",
+      "label": "Upload failed"
+    },
+    {
+      "id": "vote-not-counted",
+      "label": "A vote is not counted"
+    },
+    {
+      "id": "meeting-link",
+      "label": "Meeting link"
+    },
+    {
+      "id": "minutes-or-report",
+      "label": "Minutes or report"
+    },
+    {
+      "id": "pay-or-credits",
+      "label": "Pay or credits"
+    }
+  ],
+  "screens": []
+}

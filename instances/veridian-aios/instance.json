@@ -1,0 +1,21 @@
+{
+  "id": "veridian-aios",
+  "name": "Veridian AIOS",
+  "allowed_origins": [
+    "https://veridian-aios.com",
+    "https://app.veridian-aios.com"
+  ],
+  "retention_class": "records",
+  "enabled": true,
+  "routes": {},
+  "role_map": {
+    "organizer": "organizer"
+  },
+  "core_min": "0.2",
+  "core_max": "0.x",
+  "kb_version": "veridian-aios-0",
+  "require_ip": false,
+  "brand": {
+    "primary": "#5b3a8c"
+  }
+}

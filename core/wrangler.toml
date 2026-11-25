@@ -1,0 +1,48 @@
+# S-004: core Worker config. Test mode only: nothing here is deployed. No secrets, no account ids, no database id (the owner fills it at deploy).
+name = "moneypenny-chat-core"
+main = "src/index.js"
+compatibility_date = "2026-11-01"
+
+[vars]
+INSTANCES = "[]"              # JSON array of instance records (no secrets). Example in ../contract/fixtures/instance-example.json
+PAY_VIA_MONEYPENNY = "0"      # money flag: stays OFF
+TEAM_URL = ""                 # https origin of this Worker, used for the link in the team mail (no path). Empty: no team mail is sent.
+ACCESS_TEAM_DOMAIN = ""       # Cloudflare Access team domain, like <team>.cloudflareaccess.com. Empty: team routes stay closed.
+ACCESS_AUD = ""               # Access application audience tag. Empty: team routes stay closed.
+
+# DEPLOY NOTE: the DB binding below is commented out on purpose. Before deploy, remove the "#", set the real database_id and apply the schema.
+# Without the DB binding the worker answers 503 (try_later) for every ticket call.
+# [[d1_databases]]  binding = "DB"  database_name = "moneypenny-chat-core"  database_id = "<set at deploy>"
+# Apply the schema:  wrangler d1 execute moneypenny-chat-core --file schema.sql
+
+# Atomic counters and nonces. One Durable Object serialises every update.
+[[durable_objects.bindings]]
+name = "LIMITS"
+class_name = "Limits"
+
+[[migrations]]
+tag = "v1"
+new_classes = ["Limits"]
+
+# Secrets (never in git), per instance ID, upper case, "-" as "_":
+#   wrangler secret put SECRET_<ID>            signing secret (SECRET_<ID>_NEXT while rotating)
+#   wrangler secret put SECRET_<ID>_ASSERT     role assertion secret (_NEXT while rotating)
+
+# C4: private bucket for screenshots. No public URL, no custom domain. Create it once: wrangler r2 bucket create mpc-shots
+[[r2_buckets]]
+binding = "SHOTS"
+bucket_name = "mpc-shots"
+
+# C4 and C5: hourly sweep. Erases due screenshots and tickets, then tries queued team mail again.
+[triggers]
+crons = ["17 * * * *"]
+
+# The team page and the AI page template are text files bundled with the Worker.
+[[rules]]
+type = "Text"
+globs = ["**/*.html", "**/*.md"]
+fallthrough = true
+
+# C5: team mail goes through the platform mail service (a service binding). Fill in the service name at deploy, then remove the "#".
+# [[services]]  binding = "MAIL"  service = "<set at deploy>"
+# The team address is a secret, never in git:  wrangler secret put TEAM_EMAIL

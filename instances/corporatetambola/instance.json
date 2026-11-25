@@ -1,0 +1,22 @@
+{
+  "id": "corporatetambola",
+  "name": "Corporate Tambola",
+  "allowed_origins": [
+    "https://home.corporatetambola.com",
+    "https://console.corporatetambola.com"
+  ],
+  "retention_class": "games",
+  "enabled": true,
+  "routes": {},
+  "role_map": {
+    "host": "co-organizer",
+    "organizer": "organizer"
+  },
+  "core_min": "0.2",
+  "core_max": "0.x",
+  "kb_version": "corporatetambola-0",
+  "require_ip": false,
+  "brand": {
+    "primary": "#1f4e8c"
+  }
+}

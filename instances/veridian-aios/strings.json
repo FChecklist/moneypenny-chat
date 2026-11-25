@@ -1,0 +1,57 @@
+{
+  "terms_url": null,
+  "help_topics": [
+    {
+      "id": "start-register",
+      "label": "Start a new register",
+      "answer": null
+    },
+    {
+      "id": "add-team-member",
+      "label": "Add a team member",
+      "answer": null
+    },
+    {
+      "id": "send-notice",
+      "label": "Send a notice",
+      "answer": null
+    },
+    {
+      "id": "answer-data-request",
+      "label": "Answer a data request",
+      "answer": null
+    },
+    {
+      "id": "download-report",
+      "label": "Download a report",
+      "answer": null
+    }
+  ],
+  "stuck": [
+    {
+      "id": "cannot-sign-in",
+      "label": "Cannot sign in"
+    },
+    {
+      "id": "register-will-not-save",
+      "label": "Register will not save"
+    },
+    {
+      "id": "notice-did-not-go",
+      "label": "Notice did not go"
+    },
+    {
+      "id": "report-will-not-open",
+      "label": "Report will not open"
+    },
+    {
+      "id": "team-member-access",
+      "label": "Team member access"
+    },
+    {
+      "id": "pay-or-credits",
+      "label": "Pay or credits"
+    }
+  ],
+  "screens": []
+}

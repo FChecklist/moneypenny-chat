@@ -1,0 +1,29 @@
+# C10: instance Worker for corporatetambola. Test mode only: nothing here is deployed. No secrets, no account ids.
+name = "moneypenny-chat-corporatetambola"
+main = "worker.js"
+compatibility_date = "2026-11-01"
+
+# The widget file is built before deploy (one file: dist/widget.js, served at /mpc/widget.js).
+[build]
+command = "bun ../../scripts/build-widget.mjs corporatetambola"
+
+# Widget, proxy and core calls all go through one path on each product host: /mpc/widget.js, /mpc/config.json, /mpc/v1/*, /mpc/ai-link.
+# zone_name is taken from the host name: the owner confirms it at deploy.
+routes = [
+  { pattern = "home.corporatetambola.com/mpc/*", zone_name = "corporatetambola.com" },
+  { pattern = "console.corporatetambola.com/mpc/*", zone_name = "corporatetambola.com" },
+]
+
+# The core Worker (name from core/wrangler.toml). Private: no public route is needed for this call.
+[[services]]
+binding = "CORE"
+service = "moneypenny-chat-core"
+
+# The product server, asked for the session and for AI keys (contract/README.md, Product session adapter).
+# Fill in the product Worker name at deploy, then remove the "#". Until then proxy calls answer 503 (try_later); the widget file is still served.
+# [[services]]  binding = "PRODUCT"  service = "<set at deploy>"
+
+
+# Secrets (never in git):
+#   wrangler secret put SECRET_CORPORATETAMBOLA          same value as in the core
+#   wrangler secret put SECRET_CORPORATETAMBOLA_ASSERT   same value as in the core

@@ -1,0 +1,1 @@
+{ "option": "stuck", "type": null, "topic": "players-cannot-join", "screen": "/console/game/12345/run", "screen_label": "Run a game", "text": "I tapped Start and nothing moved.", "screenshot_id": null, "role": "co-organizer", "client": { "w": 375, "h": 812, "ua_class": "mobile" } }

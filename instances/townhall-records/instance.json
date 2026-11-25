@@ -1,0 +1,21 @@
+{
+  "id": "townhall-records",
+  "name": "Townhall Records",
+  "allowed_origins": [
+    "https://townhall-records.com"
+  ],
+  "retention_class": "records",
+  "enabled": true,
+  "routes": {},
+  "role_map": {
+    "host": "co-organizer",
+    "organizer": "organizer"
+  },
+  "core_min": "0.2",
+  "core_max": "0.x",
+  "kb_version": "townhall-records-0",
+  "require_ip": false,
+  "brand": {
+    "primary": "#2d6a4f"
+  }
+}
