@@ -1,5 +1,12 @@
 # Moneypenny Chat core changelog
 
+## 0.4.5 - 26 Nov 2026 - round 10 fixes, from two independent reviews of 0.4.4 (head d8d10fc)
+- AI notes word check (`core/src/noterules.js`): a note with a letter of any script other than Latin (Cyrillic, Greek, Devanagari and so on) is refused, because look-alike letters were not folded by NFKC and a note spelled with them had no listed word to find. Seven more verbs are listed (discard, trash, unsubscribe, refill, recharge, donate, fund).
+- Tests: honest wordings 37 to 54, the API test runs all four note types with several honest and refused wordings and checks nothing is stored on a refusal, a test for look-alike letters (it fails without the new check). The widget source scan also flags indexedDB, sendBeacon, XMLHttpRequest, WebSocket, EventSource, cache storage and a storage name built from pieces.
+- Notes: `docs/DECISIONS.md` round 10 lists what was fixed and what the boss judged and left (a ticket with a picture stays stored while the picture bucket is not bound: set the binding before the cron is switched on).
+- Tooling (commit d8d10fc, no product change): `scripts/build-widget.mjs` and the S-049 test use `fileURLToPath`, so the suite also runs on Windows.
+- Content commit: 31d005d. Version: 0.4.5. 425 tests in 37 files.
+
 ## 0.4.4 - 25 Nov 2026 - round 9 fixes, from three independent reviews of 0.4.3
 - AI notes word check (`core/src/noterules.js`) is now deny by default and much shorter. For a done, blocked, plan or step note the text is made plain (NFKC, zero-width characters removed, lower case) and the note is refused if it holds ANY listed action word (the money, removal, push and ask words, with simple endings), whatever the negation, "and", comma, hand-off or sentence shape. Only a thing-noun right before a screen label (page, screen, form, session, link, step, upload, picture) passes, so "payment page did not load" is fine and "pay now" or "delete page" is not. The clause code (`around`, `spoken`, `own`, NEAR, CUT, negation and hand-off words) is deleted. The refusal tells the AI to say what it saw or what is waiting ("paused", "waiting for a person to decide", "the page did not load"). Natural reports that hold a listed word are refused too; the list is in docs/DECISIONS.md.
 - Erase cron (`scheduled`): only `DB` is needed. A missing `DB` throws, so the cron run shows as failed. A missing `LIMITS` no longer skips the erase (the sweep does not use the limiter).
