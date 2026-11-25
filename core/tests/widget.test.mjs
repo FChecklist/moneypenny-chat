@@ -2,6 +2,7 @@
 import { test, expect } from 'bun:test';
 import { view, step, initial, ticketBody, LIMITS } from '../widget/model.js';
 import { makeApi } from '../widget/api.js';
+import { boot } from '../widget/boot.js';
 import { mountWidget } from '../widget/widget.js';
 import { CSS } from '../widget/widget.css.js';
 import { STANDARD_AI_LINE, NOTICE, PRIVACY } from '../src/strings.js';
@@ -211,4 +212,18 @@ test('0.4.2 Copy link gives the instance call the status token of the ticket thi
   await m.buttons().find((b) => b.textContent === 'Copy link').click(); await new Promise((r) => setTimeout(r, 5));
   expect(asked[1][0]).toBe('stuck'); expect(asked[1][1]).toEqual({ ticket: 'T-0009', topic: 's1', token: 'tok-77' });
   expect(makeApi({ fetchFn }).token()).toBeNull(); // a fresh page has no token
+});
+// 0.4.3 (review of 0.4.2): boot.js made the AI link key with a bare crypto.randomUUID(), which is missing in an old browser and on a page that is not https. Copy link then failed
+// there, although the ticket send (api.js) already had a fallback. boot.js now uses the same helper. This runs the real boot() with the real widget and no randomUUID.
+test('0.4.3 Copy link still works when crypto.randomUUID is not available: the link call sends a valid UUID key and the link is copied', async () => {
+  const realFetch = globalThis.fetch, real = crypto.randomUUID, sent = [], copied = [];
+  globalThis.fetch = async (u, init) => { sent.push({ u, key: init.headers['idempotency-key'], token: init.headers['x-mpc-status-token'] }); return new Response(JSON.stringify({ url: 'https://p.example/ai/9?k=abc' }), { status: 201 }); };
+  crypto.randomUUID = undefined;
+  try {
+    let w; boot({ strings, routes: {} }, { doc: fakeDoc(), loc: { pathname: '/play' }, mount: (c) => (w = mountWidget({ ...c, clipboard: { writeText: async (t) => void copied.push(t) } })) });
+    w.open(); w.act('go:help'); w.act('topic:a-topic');
+    await w.panel.all('button').find((b) => b.textContent === 'Copy link').click(); await new Promise((r) => setTimeout(r, 5));
+    expect(copied).toEqual(['https://p.example/ai/9?k=abc']); expect(w.panel.all().map((e) => e.textContent).join('\n')).not.toContain('Could not copy');
+    expect(sent.length).toBe(1); expect(sent[0].u).toBe('/mpc/ai-link'); expect(sent[0].key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/); expect(parseKey(sent[0].key)).toBe(sent[0].key);
+  } finally { globalThis.fetch = realFetch; crypto.randomUUID = real; }
 });

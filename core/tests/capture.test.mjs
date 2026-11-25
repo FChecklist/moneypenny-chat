@@ -100,8 +100,9 @@ test('C12 editor text passes the owner string rules; no tick box on the editor s
   expect(m.box.all().some((e) => e.attrs.type === 'checkbox' || e.attrs.type === 'radio' || e.attrs.role === 'checkbox')).toBe(false);
 });
 // 0.4.2: the 0.4.0 test searched the source for network, cookie and storage words. This one runs a whole capture while all of them throw.
+const NAVIGATOR_AT_START = Object.getOwnPropertyDescriptor(globalThis, 'navigator'); // 0.4.3: kept so the test below can put it back exactly (it used to delete it for every later test)
 test('C12 the library sends nothing and touches no cookie or storage: a whole capture runs with every such door throwing', async () => {
-  const doors = ['fetch', 'XMLHttpRequest', 'WebSocket', 'localStorage', 'sessionStorage', 'indexedDB'], saved = doors.map((d) => Object.getOwnPropertyDescriptor(globalThis, d));
+  const doors = ['fetch', 'XMLHttpRequest', 'WebSocket', 'localStorage', 'sessionStorage', 'indexedDB'], saved = doors.map((d) => Object.getOwnPropertyDescriptor(globalThis, d)), savedNav = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
   for (const d of doors) Object.defineProperty(globalThis, d, { configurable: true, get() { throw new Error('capture touched ' + d); } });
   try {
     const pw = new El('input', { type: 'password', value: 'hunter2' }, { x: 0, y: 0, width: 10, height: 10 }), doc = fakePage([pw]); Object.defineProperty(doc, 'cookie', { get() { throw new Error('read cookie'); }, set() { throw new Error('set cookie'); } });
@@ -110,5 +111,10 @@ test('C12 the library sends nothing and touches no cookie or storage: a whole ca
     doc.body.children[0].all('button').find((x) => x.textContent === 'Use picture').onclick(); expect((await p).size).toBe(5); expect(pw.value).toBe('hunter2');
     const q = makeCapture({ doc, render: async () => solid(100, 100), toBlob: async () => ({ size: 5 }), imageData: (d) => d })(); await new Promise((r) => setTimeout(r, 0));
     doc.body.children[1].all('button').find((x) => x.textContent === 'Discard').onclick(); expect(await q).toBeNull();
-  } finally { doors.forEach((d, i) => (saved[i] ? Object.defineProperty(globalThis, d, saved[i]) : delete globalThis[d])); delete globalThis.navigator; }
+  } finally { doors.forEach((d, i) => (saved[i] ? Object.defineProperty(globalThis, d, saved[i]) : delete globalThis[d])); if (savedNav) Object.defineProperty(globalThis, 'navigator', savedNav); else delete globalThis.navigator; }
+});
+// 0.4.3: the test above used to run `delete globalThis.navigator` in its finally block, so every test after it in the same run saw no navigator at all.
+test('0.4.3 the door test above puts the global navigator back exactly as it was (same property, same value)', () => {
+  const now = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  expect(now).toBeDefined(); expect(now).toEqual(NAVIGATOR_AT_START); expect(typeof globalThis.navigator).toBe(NAVIGATOR_AT_START ? typeof NAVIGATOR_AT_START.value : 'undefined');
 });

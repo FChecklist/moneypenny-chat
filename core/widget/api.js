@@ -2,7 +2,8 @@
 const RETRY = [300, 1200]; // two retries after the first try; only for network faults and 502/503/504
 // The core accepts only a UUID as the idempotency key (core/src/idem.js). 0.4.0 and 0.4.1 sent 32 plain hex characters, so every send was refused with bad_request;
 // the fake-fetch tests could not see it, a real browser did (tests/browser). randomUUID needs a secure page (https); the fallback makes a version 4 id by hand.
-const uuid = () => {
+// 0.4.3: exported, so boot.js (the AI link call) uses the same helper instead of a bare crypto.randomUUID().
+export const uuid = () => {
   if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   const b = crypto.getRandomValues(new Uint8Array(16)); b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
   const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join(''); return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
