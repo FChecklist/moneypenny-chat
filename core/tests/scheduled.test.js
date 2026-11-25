@@ -50,14 +50,23 @@ test('finding 1: no SHOTS binding - expired links, notes, call logs, idempotency
   } finally { warn.mockRestore(); }
 });
 
-test('finding 1: a missing DB or LIMITS binding is a clear warning, not a silent return, and nothing throws', async () => {
+test('0.4.4 a missing DB binding throws, so the cron run shows as failed', async () => {
+  const { env } = rig();
+  await expect(core.scheduled({}, { ...env, DB: undefined })).rejects.toThrow(/DB/); await expect(core.scheduled({}, {})).rejects.toThrow(/DB/);
+});
+
+test('0.4.4 a missing LIMITS binding does not skip the erase: expired links, notes, call logs and tickets are erased and the run does not throw', async () => {
   const warn = spyOn(console, 'warn').mockImplementation(() => {});
   try {
-    const { env } = rig();
-    await core.scheduled({}, { ...env, DB: undefined }); await core.scheduled({}, { ...env, LIMITS: undefined }); await core.scheduled({}, {});
-    const said = warn.mock.calls.map((c) => String(c[0]));
-    expect(said.length).toBe(3); expect(said[0]).toMatch(/\bDB\b/); expect(said[1]).toMatch(/\bLIMITS\b/); expect(said[2]).toMatch(/DB and LIMITS/);
-    for (const s of said) expect(s).toMatch(/skipped/);
+    setSystemTime(new Date(T0));
+    const { e, env, count } = rig({ SHOTS: undefined });
+    await link(e, 'b');
+    const tk = await (await e.call('POST', '/v1/tickets', fixture('ticket-help.json'), { sess: 'sess-sched-t9' })).json();
+    expect([count('ai_link'), count('ai_note'), count('ai_call_log'), count('ticket')]).toEqual([1, 1, 2, 1]);
+    setSystemTime(new Date(T0 + 25 * H));
+    await core.scheduled({}, { ...env, LIMITS: undefined });
+    expect([count('ai_link'), count('ai_note'), count('ai_call_log'), count('ticket')]).toEqual([0, 0, 0, 0]);
+    expect(await e.store.getTicket('example-product', tk.ticket, 0)).toBeNull();
   } finally { warn.mockRestore(); }
 });
 

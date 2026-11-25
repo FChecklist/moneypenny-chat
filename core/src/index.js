@@ -136,12 +136,11 @@ export default {
     return createApp(build(env, exec))(req);
   },
   // Hourly (cron in wrangler.toml): erase what is due, then try queued team mail again.
-  // 0.4.3: only DB and LIMITS are needed to start. A missing file bucket (SHOTS) skips the picture steps and nothing else, so links, notes, call logs,
-  // idempotency rows and tickets are still erased on time. A missing DB or LIMITS is logged, not hidden. A fault in the sweep never stops the mail retry;
-  // the first fault is thrown once both have run, so the cron run is still marked failed.
+  // 0.4.4: only DB is needed. The sweep does not use the limiter, so a missing LIMITS must not skip the erase. A missing DB throws, so the cron run shows as failed.
+  // A missing file bucket (SHOTS) skips the picture steps and nothing else, so links, notes, call logs, idempotency rows and tickets are still erased on time.
+  // A fault in the sweep never stops the mail retry; the first fault is thrown once both have run, so the cron run is still marked failed.
   async scheduled(_event, env) {
-    const gone = ['DB', 'LIMITS'].filter((b) => !env[b]);
-    if (gone.length) { console.warn(`scheduled run skipped: binding ${gone.join(' and ')} is missing, so nothing was erased and no mail was retried. Fix the Worker bindings.`); return; }
+    if (!env || !env.DB) throw new Error('scheduled run failed: binding DB is missing, so nothing was erased and no mail was retried. Fix the Worker bindings.');
     if (!env.SHOTS) console.warn('scheduled run: binding SHOTS (the picture bucket) is missing. Pictures are not erased in this run; everything else is.');
     const ctx = build(env); ctx.now = Date.now;
     let fault = null;

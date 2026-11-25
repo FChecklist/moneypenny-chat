@@ -155,7 +155,7 @@ for (const store of Object.keys(STORES)) {
     step(); await mark(await note(e, K, 'plan', 'Pay the bill with a card'), 'forbidden_action', 403);
     step(); await mark(await note(e, K, 'step', 'Changed the date.'), 'plan_not_approved', 409);
     step(); expect((await note(e, K, 'plan', 'Change the date to the 5th.')).status).toBe(201);
-    await mark(await note(e, K, 'plan', 'Second plan please'), 'slow_down', 429); // same second as the line before
+    await mark(await note(e, K, 'plan', 'Second plan'), 'slow_down', 429); // same second as the line before
     expect((await e.call('POST', `/v1/ai-links/${j.id}/approve`, undefined, { sess: 'sess-link-1' })).status).toBe(200);
     step(); expect((await note(e, K, 'step', 'Changed the date.')).status).toBe(201);
     const ro = E(); await link(ro, { scopes: ['read_ticket'] }); await mark(await note(ro, K, 'plan', 'Read.'), 'out_of_scope', 403);
@@ -172,7 +172,7 @@ for (const store of Object.keys(STORES)) {
     for (const [name, r] of [['big body', () => e.ai('POST', '/v1/ai/notes', { k: K, body: JSON.stringify({ type: 'step', text: 'x'.repeat(9000) }) })]]) { step(); const x = await r(); expect(x.status, name).toBe(413); }
     for (const body of ['{oops', '[1]', '"x"', '{"type":"step"}', '{"type":"step","text":5}', '{"type":"step","text":"   "}', '{"type":"step","text":"See https://evil.test/x"}', '{"type":"step","text":"Go to www.evil.test"}', '{"type":"step","text":"key mpk_abcdefgh1234"}', `{"type":"step","text":"${'a'.repeat(32)}"}`]) { step(); const x = await e.ai('POST', '/v1/ai/notes', { k: K, body }); expect(x.status, body).toBe(422); }
     for (const text of ['Delete the game', 'Please pay now', 'Use credits', 'Change the password']) { step(); expect((await note(e, K, 'step', text)).status, text).toBe(403); }
-    step(); expect((await note(e, K, 'blocked', 'I could not finish it, a person must do it.')).status).toBe(201); // blocked is how an AI says it
+    step(); expect((await note(e, K, 'blocked', 'Paused: waiting for a person to decide.')).status).toBe(201); // blocked is how an AI says it
     const f = E(); await link(f, { scopes: ['read_ticket', 'report'] }); let ok = 0; for (let i = 0; i < 20; i++) { f.clock.t += 1000; if ((await note(f, K, 'step', 'Note ' + i)).status === 201) ok++; }
     expect(ok).toBe(20); f.clock.t += 1000; const r = await note(f, K, 'step', 'Note 21'); expect(r.status).toBe(429); expect((await r.json()).retry_after).toBeGreaterThan(0);
   });

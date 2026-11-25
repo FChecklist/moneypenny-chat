@@ -110,3 +110,22 @@ test('time travel through the Worker cron entry (D1 and the real schema): a tick
   expect([count('ai_link'), count('ai_note'), count('ai_call_log'), count('ticket')]).toEqual([0, 0, 0, 1]); // links, notes and calls: gone. the records ticket: kept.
   expect(db.raw.query('SELECT COUNT(*) AS n FROM ai_link WHERE id IN (?,?)').get(a.id, b.id).n).toBe(0);
 });
+
+// 0.4.4: the same cron entry with NO picture bucket (SHOTS not bound): links, notes and call logs are still erased; a ticket that holds a picture is held.
+test('Worker cron entry with no SHOTS binding: links, notes and call logs are erased; a ticket that holds a picture is held, one without is erased', async () => {
+  setSystemTime(new Date(T0));
+  const db = fakeD1(), inst = fixture('instance-example.json');
+  const env = { DB: db, LIMITS: fakeNamespace(), INSTANCES: JSON.stringify([inst]), SECRET_EXAMPLE_PRODUCT: SECRET, SECRET_EXAMPLE_PRODUCT_ASSERT: ASSERT }; // no SHOTS
+  const e = makeEnv({ store: 'd1', d1: db, instance: inst, now: () => Date.now() }), count = (t) => db.raw.query(`SELECT COUNT(*) AS n FROM ${t}`).get().n;
+  const k = KEY('n'), lr = await e.call('POST', '/v1/ai-links', { screen: '/', scopes: ['read_ticket', 'report'], key_hash: await sha256hex(k), product_key_id: 'pk1', ttl_s: 3600 }, { sess: 'sess-nos-l' });
+  expect(lr.status).toBe(201); expect((await e.ai('POST', '/v1/ai/notes', { k, body: { type: 'plan', text: 'Read the screen.' } })).status).toBe(201); expect((await e.ai('GET', '/v1/ai/context', { k })).status).toBe(200);
+  const plain = await (await e.call('POST', '/v1/tickets', fixture('ticket-help.json'), { sess: 'sess-nos-1' })).json();
+  const shot = (await (await e.call('POST', '/v1/screenshots', undefined, { rawBody: PNG, signedBody: PNG, ctype: 'image/png', sess: 'sess-nos-2' })).json()).screenshot_id;
+  const pic = await (await e.call('POST', '/v1/tickets', { ...fixture('ticket-suggest.json'), screenshot_id: shot }, { sess: 'sess-nos-2' })).json();
+  expect([count('ai_link'), count('ai_note'), count('ai_call_log'), count('ticket')]).toEqual([1, 1, 2, 2]);
+  setSystemTime(new Date(T0 + 25 * H));
+  await core.scheduled({}, env);
+  expect([count('ai_link'), count('ai_note'), count('ai_call_log')]).toEqual([0, 0, 0]);
+  expect(await e.store.getTicket(PRODUCT, plain.ticket, 0)).toBeNull();
+  expect(await e.store.getTicket(PRODUCT, pic.ticket, 0)).not.toBeNull(); expect(count('shot')).toBe(1);
+});
