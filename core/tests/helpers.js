@@ -40,8 +40,8 @@ export function fakeD1() {
 
 export const STORES = { memory: () => memoryStore(), d1: () => { const d = fakeD1(); const s = d1Store(d); s.raw = d.raw; return s; } };
 
-export function makeEnv({ store = 'memory', instance = fixture('instance-example.json'), now = () => Date.now(), team = false, nonceCap, mail = fakeMailer(), teamEmail = TEAM_ADDR, teamUrl = 'https://core.test', teamAuth } = {}) {
-  const instances = parseInstances([instance]), limiter = makeLimiter(fakeNamespace({ nonceCap })), st = STORES[store]();
+export function makeEnv({ store = 'memory', instance = fixture('instance-example.json'), now = () => Date.now(), team = false, nonceCap, mail = fakeMailer(), teamEmail = TEAM_ADDR, teamUrl = 'https://core.test', teamAuth, others = [] } = {}) {
+  const instances = parseInstances([instance, ...others]), limiter = makeLimiter(fakeNamespace({ nonceCap })), st = STORES[store]();
   const blobs = memoryBlobs(), secrets = (id, kind) => (kind === 'sign' ? [SECRET] : [ASSERT]);
   const app = createApp({ instances, secrets, store: st, limiter, now, blobs, mail, teamEmail, teamUrl, teamAuth: teamAuth ?? (team ? () => true : undefined) });
   const n = { c: 0 }; const hex = () => (++n.c).toString(16).padStart(32, '0');

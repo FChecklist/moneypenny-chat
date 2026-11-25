@@ -141,3 +141,8 @@ Not confirmed by the owner. Built: widget bundle and Worker entry (C10), session
 - **Masking limits.** Text outside fields is hidden only when the product marks it `data-mpc-hide`. A secret in a field with a plain name and a plain type (for example a text box holding a short code) is not found. The editor is drag only; a keyboard way to place boxes is not built. Blur is coarse blocks; Hide is the safe choice.
 - **Voter-list screens (I8).** `takePicture` takes a `blocked()` check, but no instance sets it yet: the owner has not decided, and the route table is empty.
 - **Capture assumes the picture starts at the top left of the visible page** (field boxes are in viewport pixels, scaled by picture width over `innerWidth`).
+
+## Round 6 notes (version 0.4.1)
+- **AI note word list is a second layer.** Scope limits, checked on every call, are the real guard; the word list on free text only catches plain slips and can be got round with other words.
+- **Team login has no product.** The team login is one Access login for the whole team, so the product comes from the query and is checked against the instance list. Every read, update, erase and picture call is keyed by instance and number, so a ticket of one instance cannot be reached through another (tests with two instances). A per-product team login is not built.
+- **Proxy AI link ticket check.** The proxy reads the named ticket at the core with the caller's status token before it asks the product for a key. The ticket does not store a session, so the token is the proof of ownership.

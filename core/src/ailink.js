@@ -91,7 +91,12 @@ export async function aiContext(ctx, req) {
   return logged(ctx, req, l, 'GET', 'ai/context', 200, aiJson(body));
 }
 // A note must not ask for payments, identity changes or deleting (all note types), must carry no link to another site, and no secret-looking token.
-const FORBIDDEN = /\b(pay|pays|paid|payments?|razor\w*|credits?|passwords?|delete|deletes|deleted|deleting|erase|erased|erases)\b/i, LINKY = /https?:\/\/|\bwww\./i, SECRETY = /\bmpk_[A-Za-z0-9]{8,}|[A-Za-z0-9_-]{32,}/;
+const FORBIDDEN_WORDS = ['pay', 'pays', 'paid', 'paying', 'payments?', 'payout', 'payouts', 'razor\\w*', 'credits?', 'passwords?', 'passcodes?', 'charge', 'charges', 'charged', 'charging', 'purchase', 'purchases', 'purchased', 'buy', 'buys', 'bought',
+  'delete', 'deletes', 'deleted', 'deleting', 'erase', 'erased', 'erases', 'erasing', 'remove', 'removes', 'removed', 'removing', 'wipe', 'wipes', 'wiped', 'wiping', 'purge', 'purges', 'purged', 'purging', 'destroy', 'destroys', 'destroyed', 'destroying',
+  'refund', 'refunds', 'refunded', 'refunding', 'reimburse', 'reimburses', 'reimbursed', 'reimbursing', 'cancel', 'cancels', 'canceled', 'cancelled', 'canceling', 'cancelling', 'cancellation',
+  'transfer', 'transfers', 'transferred', 'transferring'];
+// A word list on free text is only a second layer. The real guard is the scope list (scopes.js) checked on every call; see docs/DECISIONS.md.
+const FORBIDDEN = new RegExp(`\\b(?:${FORBIDDEN_WORDS.join('|')})\\b|\\b(?:change|changes|changed|changing|update|updates|updated|updating|reset|resets|replace|replaces|replaced|replacing)\\s+(?:the\\s+|their\\s+|a\\s+|an\\s+|his\\s+|her\\s+)?(?:e-?mails?|passwords?)\\b`, 'i'), LINKY = /https?:\/\/|\bwww\./i, SECRETY = /\bmpk_[A-Za-z0-9]{8,}|[A-Za-z0-9_-]{32,}/;
 export async function aiNote(ctx, req, raw) {
   const b = await bearer(ctx, req); if (b.err) return b.err;
   const { l, now } = b, fin = (code, status, res) => logged(ctx, req, l, 'POST', 'ai/notes', status, res);

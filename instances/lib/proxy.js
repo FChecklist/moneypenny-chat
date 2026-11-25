@@ -73,6 +73,11 @@ export function createInstance({ config, strings, secrets, product, core, now = 
       // POST /mpc/ai-link {kind, ticket?, screen?}: the product mints the key; the core keeps only its hash; this server adds k.
       let b; try { b = JSON.parse(await req.text()); } catch { b = null; }
       if (!b || !Object.hasOwn(AI_KINDS, b.kind)) return err(400, 'bad_request', 'Something in the request is wrong. Check the fields.'); // unknown kind: refused, no default scopes
+      if (b.ticket !== undefined && b.ticket !== null) { // a named ticket must be this person's own: the core checks the status token of that ticket for this instance, before any key is minted
+        if (typeof b.ticket !== 'string' || !/^T-\d{4,}$/.test(b.ticket)) return err(400, 'bad_request', 'Something in the request is wrong. Check the fields.');
+        const own = await toCore('GET', '/v1/tickets/' + b.ticket, req, null, who);
+        if (own.status !== 200) return err(403, 'not_yours', 'This ticket is not available.');
+      }
       const k = await product.mintKey({ session: who.user_id || who.sess, scopes: AI_KINDS[b.kind], ttl_s: AI_TTL_S });
       if (k.status !== 201) return err(503, 'try_later', 'Please try again in a moment.');
       const body = new TextEncoder().encode(JSON.stringify({ scopes: k.body.scopes, ttl_s: AI_TTL_S, key_hash: k.body.key_hash, product_key_id: k.body.product_key_id, ...(typeof b.ticket === 'string' ? { ticket: b.ticket } : {}), ...(typeof b.screen === 'string' ? { screen: b.screen } : {}) }));

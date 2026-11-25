@@ -65,6 +65,11 @@ export function d1Store(db) {
     async shotsOfTicket(instance, number) { return (await db.prepare('SELECT * FROM shot WHERE instance=? AND ticket=?').bind(instance, number).all()).results; },
     async dueShots(now) { return (await db.prepare('SELECT * FROM shot WHERE erase_at<=?').bind(now).all()).results; },
     async dropShots(ids) { for (const id of ids) await db.prepare('DELETE FROM shot WHERE id=?').bind(id).run(); },
+    async eraseExpiredLinks(now) {
+      const due = '(SELECT id FROM ai_link WHERE ticket IS NULL AND expires<=?)';
+      const r = await db.batch([db.prepare(`DELETE FROM ai_note WHERE link_id IN ${due}`).bind(now), db.prepare(`DELETE FROM ai_call_log WHERE link_id IN ${due}`).bind(now), db.prepare('DELETE FROM ai_link WHERE ticket IS NULL AND expires<=?').bind(now)]);
+      return r.length;
+    },
     async dueTickets(now) { return (await db.prepare('SELECT instance, number FROM ticket WHERE erase_at<=?').bind(now).all()).results; },
     async eraseTicket(instance, number, now) {
       if (!(await db.prepare('SELECT 1 AS x FROM ticket WHERE instance=? AND number=?').bind(instance, number).first())) return false;

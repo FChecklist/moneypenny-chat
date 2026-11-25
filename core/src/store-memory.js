@@ -56,6 +56,10 @@ export function memoryStore() {
       mailq = mailq.filter((m) => !(m.instance === instance && m.number === number));
       erasure.push({ ticket: number, instance, erased_at: now }); return true;
     },
+    async eraseExpiredLinks(now) {
+      const ids = links.filter((l) => l.ticket == null && l.expires <= now).map((l) => l.id);
+      links = links.filter((l) => !ids.includes(l.id)); notes = notes.filter((n) => !ids.includes(n.link_id)); calls = calls.filter((c) => !ids.includes(c.link_id)); return ids.length;
+    },
     async expireIdem(now) { for (const [k, v] of idem) if (v.expires <= now) idem.delete(k); },
     async erasureLog() { return erasure.map((e) => ({ ...e })); },
     async audit(row) { audits.push({ ...row }); },

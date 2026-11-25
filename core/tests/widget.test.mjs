@@ -147,7 +147,7 @@ test('S-058 the C4 screenshot hook: nothing is sent before Send; then the pictur
   expect(calls.map((c) => c[0])).toEqual(['/mpc/v1/screenshots', '/mpc/v1/tickets']); expect(JSON.parse(calls[1][1]).screenshot_id).toBe('abcdefgh12345678');
   expect(mountWidgetHasNoShotWithoutHook()).toBe(true);
 });
-function mountWidgetHasNoShotWithoutHook() { const m = mount(); m.w.open(); m.w.act('go:suggest'); m.w.act('type:option'); return !m.texts().includes('screenshot'); }
+function mountWidgetHasNoShotWithoutHook() { const m = mount(); m.w.open(); m.w.act('go:suggest'); m.w.act('type:option'); return !/screenshot/i.test(m.texts()); }
 test('S-059 status screen reads the ticket with the token kept in memory; a missing token or error says so plainly', async () => {
   const seen = [];
   const fetchFn = async (u, init) => { seen.push([u, init.method, init.headers['x-mpc-status-token']]); return init.method === 'POST' ? new Response(JSON.stringify({ ticket: 'T-0004', status_token: 'tok-9' }), { status: 201 }) : new Response(JSON.stringify({ ticket: 'T-0004', status: 'seen', team_note: 'Looking at it.' }), { status: 200 }); };
@@ -170,4 +170,12 @@ test('every screen text passes the owner word rules; unknown screen is refused, 
   all.push(view({ ...initial(), screen: 'help.answer', topic: 'a-topic' }, cfg()), view({ ...initial(), screen: 'suggest.sent', sent: { ticket: 'T-0001' } }, cfg()), view({ ...initial(), screen: 'stuck.sent', sent: { ticket: 'T-0001' } }, cfg()));
   expect(checkStrings(all.map((v) => [v.title, ...v.lines, ...v.controls.map((c) => c.label || c.copy || c.text || '')]))).toEqual([]);
   expect(() => view({ ...initial(), screen: 'nope' }, cfg())).toThrow();
+});
+test('round 6 widget output has no tick box: no aria-checked, no aria-pressed and no input tag on any screen', () => {
+  const m = mount(); m.w.open(); const seen = [];
+  const scan = () => { const walk = (n) => { seen.push(n); (n.children || []).forEach(walk); }; walk(m.w.panel); };
+  scan(); for (const id of ['go:help', 'back', 'go:suggest', 'type:option', 'back', 'go:stuck', 'where:here', 'stuck:s1', 'next']) { try { m.w.act(id); } catch {} scan(); }
+  expect(seen.length).toBeGreaterThan(10);
+  for (const n of seen) { expect(n.tag).not.toBe('input'); expect(n.attrs?.['aria-checked']).toBeUndefined(); expect(n.attrs?.['aria-pressed']).toBeUndefined(); }
+  for (const src of [readFileSync(new URL('../widget/widget.js', import.meta.url), 'utf8'), readFileSync(new URL('../widget/model.js', import.meta.url), 'utf8')]) expect(src).not.toMatch(/aria-checked|aria-pressed|createElement\(['"]input['"]|<input/i);
 });

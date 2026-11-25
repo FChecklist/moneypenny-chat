@@ -1,5 +1,11 @@
 # Moneypenny Chat core changelog
 
+## 0.4.1 - 25 Nov 2026 - round 6 fixes
+- AI notes: the forbidden word list is wider (synonyms for delete, pay, refund, cancel, remove, wipe, transfer, and "change e-mail" or "change password" phrases). It is a second layer; scope limits are the real guard.
+- AI links with no ticket: link, notes and call log are erased in the hourly sweep when the link expires (`store.eraseExpiredLinks`).
+- Proxy `/mpc/ai-link`: a named ticket must be the caller's own (status token checked at the core for this instance) before a key is minted; scopes come from the kind only.
+- Team routes: tests with two instances show no read, update, erase or picture across instances. Tests: `core/tests/round6.test.js`, widget and instance tests.
+
 ## 0.4.0 - 25 Nov 2026 - C10 to C12: widget bundle, Worker entry, session adapter, screenshot capture
 - Widget bundle: `bun scripts/build-widget.mjs [id]` writes one file per instance, `instances/<id>/dist/widget.js` (not in git). `core/widget/boot.js` is the entry; the public instance record (text, colours, route table) is baked in. Served at `GET /mpc/widget.js` (`text/javascript`, `cache-control: public, max-age=300`, no cookie, no CORS header).
 - Worker entry per instance: `instances/<id>/worker.js` and `wrangler.toml` (routes for `/mpc/*` on each allowed host, `CORE` service binding, `PRODUCT` binding commented until the owner gives the name, build command, no secrets). Logic in `instances/lib/worker.js`. The widget file and `/mpc/config.json` are served even when secrets or bindings are missing; proxy calls then answer 503 `try_later`.

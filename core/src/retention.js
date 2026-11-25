@@ -23,6 +23,7 @@ export async function sweep(ctx, now = ctx.now()) {
   const out = { shots: 0, tickets: 0 };
   for (const s of await ctx.store.dueShots(now)) { await ctx.blobs.delete(s.key); await ctx.store.dropShots([s.id]); await ctx.store.audit({ at: now, instance: s.instance, ticket: s.ticket && s.ticket !== 'claim' ? s.ticket : null, action: 'screenshot_erased', who: 'system' }); out.shots++; }
   for (const t of await ctx.store.dueTickets(now)) if (await eraseTicketNow({ ...ctx, now: () => now }, t.instance, t.number, 'system')) out.tickets++;
+  await ctx.store.eraseExpiredLinks(now); // links with no ticket have no other erase path: they go, with their notes and calls, at link expiry
   await ctx.store.expireIdem(now);
   return out;
 }

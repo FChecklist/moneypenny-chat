@@ -23,8 +23,9 @@ function rig(id = 'corporatetambola', { origin } = {}) {
 }
 const TICKET = { option: 'suggest', type: 'feature', text: 'Please add a small timer here', screen: '/console/x' };
 
-test('round 5: instance strings (topics, answers, stuck items) pass the owner string rules, and a slip fails', () => {
-  for (const id of IDS) { const s = rd(id, 'strings.json'); expect(checkStrings(s), id).toEqual([]); expect(checkStrings({ ...s, help_topics: [{ id: 'a', label: 'Set up', answer: 'Open your game.' }] }).length).toBe(1); expect(checkStrings({ ...s, stuck: [{ id: 'a', label: 'My game' }] }).length).toBe(1); }
+test('round 5 and 6: every instance strings.json goes through checkStrings (found by folder, not by a fixed list), and a slip fails', () => {
+  const dirs = readdirSync(new URL('..', import.meta.url)).filter((d) => !['lib', 'tests'].includes(d)); expect(dirs.sort()).toEqual([...IDS].sort());
+  for (const id of dirs) { const s = rd(id, 'strings.json'); expect(checkStrings(s), id).toEqual([]); expect(checkStrings({ ...s, help_topics: [{ id: 'a', label: 'Set up', answer: 'Open your game.' }] }).length).toBe(1); expect(checkStrings({ ...s, stuck: [{ id: 'a', label: 'My game' }] }).length).toBe(1); }
 });
 test('round 5: terms_url is required: null or a real /terms path; the home page is refused', () => {
   const { config, strings } = cfgOf('corporatetambola');
@@ -50,6 +51,15 @@ test('each instance record passes the core schema check, its strings pass the ow
   expect(() => checkConfig(config, { ...strings, screens: 'x' })).toThrow();
   expect(() => createInstance({ ...rig(), config, strings, secrets: { sign: 'short', assert: ASSERT } })).toThrow();
 });
+test('round 6 AI link from the proxy: a named ticket must be the caller\'s own (status token, this instance) before any key is minted; scopes come from the kind only', async () => {
+  const r = rig('corporatetambola'), r2 = rig('townhall-records'); let minted = 0; const mint = r.product.mintKey; r.product.mintKey = (x) => { minted++; return mint(x); };
+  const tk = await (await r.post('/mpc/v1/tickets', TICKET)).json(), foreign = await (await r2.post('/mpc/v1/tickets', TICKET)).json();
+  const link = (b, token) => r.post('/mpc/ai-link', b, { headers: token ? { 'x-mpc-status-token': token } : {} });
+  expect((await link({ kind: 'stuck', ticket: tk.ticket })).status).toBe(403); expect((await link({ kind: 'stuck', ticket: tk.ticket }, foreign.status_token)).status).toBe(403); // no token; another instance's token
+  expect((await link({ kind: 'stuck', ticket: 'T-9999' }, tk.status_token)).status).toBe(403); expect((await link({ kind: 'stuck', ticket: 5 }, tk.status_token)).status).toBe(400); expect(minted).toBe(0);
+  const ok = await link({ kind: 'help', ticket: tk.ticket, scopes: ['read_ticket', 'report', 'edit_event'] }, tk.status_token); expect(ok.status).toBe(201); expect(minted).toBe(1);
+  const row = await r.env.store.getLinkByHash(await (await import('../../core/src/crypto.js')).sha256hex((await ok.json()).url.split('k=')[1])); expect(JSON.parse(row.scopes)).toEqual(AI_KINDS.help); // body scopes ignored
+});
 test('topic and stuck lists match the owner list in the spec (tambola confirmed from the old KB; the other two are proposed)', () => {
   const lab = (id) => [cfgOf(id).strings.help_topics.map((t) => t.label), cfgOf(id).strings.stuck.map((t) => t.label)];
   expect(lab('corporatetambola')).toEqual([['Price of a game', 'Create a game', 'Invite players', 'Refund and cancel', 'Add a co-organizer'], ['A link does not work', 'Players cannot join', 'Log in', 'Pay or credits', 'Game will not start', 'Prizes or winners']]);
@@ -68,6 +78,7 @@ test('no secrets in the instance files', () => {
 });
 
 for (const id of IDS) {
+  test(`${id}: strings.json goes through checkStrings with no finding`, () => { expect(checkStrings(rd(id, 'strings.json'))).toEqual([]); });
   test(`${id}: ticket through the proxy reaches the core; the role comes from the product server; ticket is stored and has an audit row`, async () => {
     const r = rig(id), res = await r.post('/mpc/v1/tickets', { ...TICKET, role: 'organizer' });
     expect(res.status).toBe(201); const j = await res.json(); expect(j.ticket).toMatch(/^T-\d{4,}$/);
@@ -133,5 +144,5 @@ test('co-organizer: the product role "host" is stored as co-organizer; DNT reach
 });
 test('the proxy sets and reads no cookies; the standard line is imported, not copied; version notes exist', () => {
   const src = readFileSync(new URL('../lib/proxy.js', import.meta.url), 'utf8'); expect(src).not.toMatch(/set-cookie|req\.headers\.get\('cookie'\)|document\.cookie/i);
-  expect(src).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.4.0'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.4.0');
+  expect(src).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.4.1'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.4.1');
 });

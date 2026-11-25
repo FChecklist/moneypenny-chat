@@ -2,7 +2,7 @@
   "openapi": "3.0.3",
   "info": {
     "title": "Moneypenny Chat core",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "description": "Error body is always {\"error\": code, \"message\": text}. Every response has x-mpc-core-version."
   },
   "paths": {
