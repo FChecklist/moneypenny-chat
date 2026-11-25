@@ -211,3 +211,18 @@ Not confirmed by the owner. Two independent read-only reviews of head d8d10fc (a
 - **Review A: a replayed screenshot upload with the same key and bytes from another session returns the first session's picture id.** The picture still can only be claimed by the first session's own hash, so the id is no use to the second one. Left.
 - **Review B: `scheduled` with a missing LIMITS.** The test removes LIMITS and checks that links, notes, call logs and tickets are erased and the run does not fail, so it would fail if the guard came back; `scheduled` never reads LIMITS. Not a defect.
 **Still not run in this round:** the real-browser tests (`bun run test:browser`).
+
+## Round 11 notes (version 0.4.6)
+Not confirmed by the owner. A second pair of independent read-only reviews, of head 7d299c3 (0.4.5), both said FAIL on Medium findings again. The boss judged each one.
+**Fixed:**
+- **A link hidden with an invisible or full-width character.** The link and secret checks used to run on the raw text, so "h" + a zero-width space + "ttps://..." passed. The note is now made plain once (NFKC, zero-width and soft-hyphen characters removed: `plainNote` in `core/src/noterules.js`) BEFORE the link, secret and word checks, and the note is STORED in that plain form, so what is checked is what is kept. This also answers the review's question about order: `scrub` (e-mail and number masking) runs only at the store step and only swaps text for "[removed]".
+- **Accents.** "d" + e-acute + "lete" used to split into the words "d" and "lete" and pass. Accents are now folded off for the word check (NFD, marks removed), so it reads "delete". After folding, any letter that is not a to z is refused (Cyrillic, Greek, Devanagari, or a Latin letter with no plain form such as a dotless i or an o with a stroke). An accented name still passes ("Cafe" with an accent), because it folds to plain letters.
+- **The zero-width characters in the source** are now written as escapes (`\u200B-\u200D`, `\u2060`, `\uFEFF`, `\u00AD`), so the line can be read in a review (one review could not tell whether the invisible characters were really there).
+- **Widget source scan.** A "//" now counts as a comment only at the start of a line or after a space, so "a//b; localStorage.x = 1" is no longer hidden (a review showed it passed). Still a text scan; the browser tests are the real check.
+- **Tests:** accent cases, the link and full-width cases through the API, and the stored plain form; each of the four changes was removed once and the tests failed (5, 3, 2 and 1 failing tests), then restored.
+**Judged, not changed:**
+- **Review B: the tables do not measure over-refusal.** The honest table (54 wordings) is what keeps the list from being widened carelessly: a widened list fails it. Natural reports that hold a listed word are refused on purpose (round 9 lists them); the AI can reword. Left.
+- **Review B: a digit inside a word ("p1ay") or spaces ("p a y") hide a listed word.** Known and listed in round 9 under "Not covered"; the check is a closed list and a second layer, the scope list and the product backend are the lock. Left.
+- **Review A: the per-note limiter slot is not given back when the store fails.** The cost of a store fault is one of 20 notes on a link that lives 24 hours. Left (Low).
+- **Review B: a ticket with a picture while the picture bucket is not bound.** Judged sound by both reviews of 0.4.5, with the point that the deploy list must enforce the binding. `core/wrangler.toml` binds `SHOTS` (line 33). Owner option stays open: blank the text of a held ticket at once.
+- **Browser tests** (`bun run test:browser`) were last run on 0.4.3 and were NOT run on 0.4.6; KNOWLEDGE.md now says so.

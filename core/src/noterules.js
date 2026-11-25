@@ -16,7 +16,10 @@ const LISTED = new Set([...VERBS, ...NOUNS, ...STRONG, ...ASK].flatMap(forms).co
 const THING_NOUNS = new Set(stems('payment payments payout payouts credit credits password passwords passcode passcodes cancellation cancellations refund refunds transfer transfers charge charges purchase purchases'));
 const LABELS = new Set(stems('page pages screen screens form forms session sessions link links step steps upload uploads picture pictures'));
 
-const clean = (text) => text.normalize('NFKC').replace(/[​-‍⁠﻿­]/g, '').toLowerCase();
+// 0.4.6: one plain form of a note, used for every check AND for what is stored: NFKC, zero-width and soft-hyphen characters removed (written as escapes, so the source can be read).
+export const plainNote = (text) => text.normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF\u00AD]/g, '');
+// For the word check the plain form is also lower-cased and accents are folded off (NFD, then the marks removed), so "d\u00E9lete" is read as "delete".
+const clean = (text) => plainNote(text).toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
 const wordsOf = (s) => s.match(/[a-z0-9]+/g) || [];
 
 // Returns null when the text passes, or 'forbidden_action'. Types other than the four are not decided here (the caller refuses them as bad_note).
@@ -24,9 +27,10 @@ export function checkNoteText(type, text) {
   if (typeof text !== 'string') return null;
   if (type !== 'plan' && type !== 'step' && type !== 'done' && type !== 'blocked') return null;
   const t = clean(text);
-  // 0.4.5: a note is plain English. A letter of any other script (Cyrillic, Greek, Devanagari and so on) is refused, because some Cyrillic letters look exactly like Latin "p", "a" and "y" and NFKC
-  // does not fold them, so a note spelled with them would have no listed word to find. The cost: a note that quotes a page label in another script is refused too; the AI can say what it saw in plain words.
-  if (/[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]/u.test(t)) return 'forbidden_action';
+  // 0.4.5/0.4.6: a note is plain English. After the accents are folded off, any letter that is not a to z (Cyrillic, Greek, Devanagari, or a Latin letter that has no plain form such as a dotless i)
+  // is refused: some of them look exactly like a Latin letter and NFKC does not fold them, so a note spelled with them would have no listed word to find. The cost: a note that quotes a page
+  // label in another script is refused too; the AI can say what it saw in plain words. Digits, punctuation, the rupee sign and emoji are not letters and pass.
+  if (/[^\P{L}a-z]/u.test(t)) return 'forbidden_action';
   // The text is read twice: with a hyphen as a space ("top-up" -> top, up) and with it removed ("e-mail" -> email, "de-lete" -> delete).
   for (const w of [wordsOf(t), wordsOf(t.replace(/-/g, ''))]) for (let i = 0; i < w.length; i++) {
     if (w[i].startsWith('razor')) return 'forbidden_action';

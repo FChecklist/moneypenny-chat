@@ -7,8 +7,9 @@ import { readFileSync, readdirSync } from 'node:fs';
 
 const DIR = new URL('../widget/', import.meta.url);
 const files = (d = DIR, prefix = '') => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(new URL(e.name + '/', d), prefix + e.name + '/') : e.name.endsWith('.js') ? [prefix + e.name] : []));
-// Code only: block comments and line comments removed (a "//" right after ":" is a web address inside a string, so it stays).
-const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+// Code only: block comments and line comments removed. 0.4.6: a "//" counts as a comment only at the start of a line or after a space, so "a//b" or a web address inside a string
+// does not hide the rest of its line.
+const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
 
 // Returns a list of problems found in one file's source text.
 export function scan(src) {
@@ -38,6 +39,8 @@ test('the scan itself works: it flags each forbidden thing and lets a same-site 
   expect(scan("document . cookie = 'a=b'")).toEqual(['document.cookie']);
   expect(scan("localStorage.setItem('a', 1)")).toEqual(['localStorage']);
   expect(scan("window.sessionStorage.getItem('a')")).toEqual(['sessionStorage']);
+  expect(scan("const r = a//b; localStorage.x = 1")).toEqual(['localStorage']); // 0.4.6: "a//b" is not a comment, so the rest of its line is still read
+  expect(scan("const p = 'https://x.example/a'; document.cookie = 'a=1'")).toEqual(['document.cookie', 'a written-out web address']);
   expect(scan("indexedDB.open('x')")).toEqual(['indexedDB']);
   expect(scan("navigator.sendBeacon('/x', data)")).toEqual(['sendBeacon']);
   expect(scan('const r = new XMLHttpRequest();')).toEqual(['XMLHttpRequest']);

@@ -40,7 +40,7 @@ const PASSES = [
   'The ticket number is on the first line and the status says open.', 'I opened the second tab and the list had 4 rows: 2 marked, 2 empty.',
   'The board did not change for a minute, so I am pausing here.', 'The screen shows "Game not found" in red.', 'Stopped after step 3 of 5 because the next page is blank.',
   'Step 2 done: the list was visible and I counted 7 names.', 'The help answer is clear and short. Nothing else to report.', 'It is 9:30 and the page still shows the old title.',
-  'Reached the end of the page. The footer has a version line.', 'The same error shows on every screen I looked at.', 'Café menu page did not load',
+  'Reached the end of the page. The footer has a version line.', 'The same error shows on every screen I looked at.', 'Caf\u00E9 menu page did not load',
 ];
 test('refused in done, blocked, plan and step: any listed word, wherever it stands (' + REFUSED.length + ' wordings)', () => { expect(REFUSED.length).toBeGreaterThanOrEqual(30); all(REFUSED, 'forbidden_action'); });
 test('passes in done, blocked, plan and step: plain reports and words that only contain a listed word (' + PASSES.length + ' wordings)', () => { expect(PASSES.length).toBeGreaterThanOrEqual(30); expect(REFUSED.length + PASSES.length).toBeGreaterThanOrEqual(60); all(PASSES, null); });
@@ -53,8 +53,13 @@ test('endings and spelling tricks: -s -ed -ing, irregular words, hyphens, zero-w
 });
 // 0.4.5: look-alike letters. NFKC folds full-width letters but not Cyrillic or Greek ones that look the same, so a note spelled with them used to have no listed word to find.
 test('0.4.5 a letter of another script is refused in every type: Cyrillic look-alikes of "pay" and "delete", Greek, Devanagari; an accented Latin letter passes', () => {
-  all(['рау now', 'pаy now', 'dеlete the game', 'рay the bill', 'ρay now', 'The page says नमस्ते', 'рау'], 'forbidden_action');
-  all(['Café menu page did not load', 'The page says résumé', 'It costs ₹ 500 on the screen label'], null);
+  all(['\u0440\u0430\u0443 now', 'p\u0430y now', 'd\u0435lete the game', '\u0440ay the bill', '\u03C1ay now', 'The page says \u0928\u092E\u0938\u094D\u0924\u0947', '\u0440\u0430\u0443'], 'forbidden_action');
+  all(['Caf\u00E9 menu page did not load', 'The page says r\u00E9sum\u00E9', 'It costs \u20B9 500 on the screen label'], null);
+});
+// 0.4.6: accents. "d\u00E9lete" used to split into the words "d" and "lete" and pass; the accents are folded off now, and a Latin letter with no plain form is refused.
+test('0.4.6 an accented look-alike of a listed word is read as the word, and a letter with no plain form is refused', () => {
+  all(['d\u00E9lete the game', 'p\u00E0yment now', 'r\u00E9fund the order', 'Pa\u0301y now', 'canc\u00E9l it', 'delete th\u0131s', 'pay n\u00F8w'], 'forbidden_action');
+  all(['The Caf\u00E9 page did not load', 'No\u00EBl screen is blank'], null);
 });
 test('an unknown type or a non-string is not decided here (the caller refuses it as bad_note)', () => {
   expect(checkNoteText('wish', 'Pay now')).toBeNull(); expect(checkNoteText('blocked', 5)).toBeNull();
@@ -88,7 +93,13 @@ for (const store of Object.keys(STORES)) {
     // 0.4.5: every type goes through the same call with several honest wordings (a review found one wording and 8 refusals too thin) and every type is refused on several listed words
     const HONEST = ['The payment page did not load.', 'I read the screen. The title says Games and there are 12 players in the list.', 'Stopped after step 3 of 5 because the next page is blank.', 'Waiting for a person to decide.'];
     for (const type of ['blocked', 'done', 'plan', 'step']) for (const text of HONEST) { const e = await rig(); const ok = await note(e, type, text); expect([type, text, ok.status]).toEqual([type, text, 201]); }
-    const BAD = ['I paid the bill.', 'Please delete the game.', 'Razorpay was used.', 'The Cancel button is greyed out', 'Pay now', 'Nothing failed and deleted the game', 'No problem delete the game', 'The page was removed.', 'Fund the account', 'pаy now'];
+    // 0.4.6: the note is made plain BEFORE the link and secret checks and is stored in that form
+    for (const text of ['See h​ttps://x.example/a', 'See ｈｔｔｐｓ://x.example/a', 'Look at ww​w.x.example']) {
+      const e = await rig(); const r = await note(e, 'blocked', text); expect([text, r.status, r.body.error]).toEqual([text, 422, 'bad_note']);
+    }
+    { const e = await rig(); const ok = await note(e, 'blocked', 'The page says Café st​atus ok'); expect(ok.status).toBe(201);
+      expect((await e.store.listNotes((await e.store.getLinkByHash(await sha256hex(K))).id)).map((n) => n.text)).toEqual(['The page says Café status ok']); }
+    const BAD = ['I paid the bill.', 'Please delete the game.', 'Razorpay was used.', 'The Cancel button is greyed out', 'Pay now', 'Nothing failed and deleted the game', 'No problem delete the game', 'The page was removed.', 'Fund the account', 'p\u0430y now'];
     for (const type of ['blocked', 'done', 'plan', 'step']) for (const text of BAD) {
       const e = await rig(); const r = await note(e, type, text); expect([type, text, r.status, r.body.error]).toEqual([type, text, 403, 'forbidden_action']);
       expect((await e.store.listNotes((await e.store.getLinkByHash(await sha256hex(K))).id)).length).toBe(0); // nothing was stored

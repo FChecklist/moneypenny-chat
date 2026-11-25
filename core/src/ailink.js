@@ -7,7 +7,7 @@ import { audit } from './audit.js';
 import { sideRecord } from './privacy.js';
 import { aiError, aiJson, pageModel, pageResponse } from './aipage.js';
 import { AI_NEXT, FALLBACK_SCREEN } from './strings.js';
-import { checkNoteText } from './noterules.js';
+import { checkNoteText, plainNote } from './noterules.js';
 
 export const LINK_LIMITS = { perHour: 5, notes: 20, noteChars: 800, ttlDefault: 7200, ttlMax: 86400, ttlMin: 60 };
 export const NOTE_TYPES = ['plan', 'step', 'done', 'blocked'];
@@ -102,7 +102,8 @@ export async function aiNote(ctx, req, raw) {
   if (raw === null) return fin('big', 413, aiError('too_large'));
   let p; try { p = JSON.parse(raw); } catch { p = null; }
   if (!p || typeof p !== 'object' || Array.isArray(p) || !NOTE_TYPES.includes(p.type) || typeof p.text !== 'string') return fin('bad', 422, aiError('bad_note'));
-  const text = p.text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim(), n = [...text].length;
+  // 0.4.6: the note is made plain (NFKC, zero-width characters removed) BEFORE the link, secret and word checks and is stored in that same form, so what is checked is what is kept. scrub() runs only at the store step: it can only swap an e-mail or a number for [removed].
+  const text = plainNote(p.text.replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')).trim(), n = [...text].length;
   if (n > LINK_LIMITS.noteChars) return fin('big', 413, aiError('too_large'));
   if (n < 1 || LINKY.test(text) || SECRETY.test(text)) return fin('bad', 422, aiError('bad_note'));
   if (checkNoteText(p.type, text)) return fin('forbidden', 403, aiError('forbidden_action'));
