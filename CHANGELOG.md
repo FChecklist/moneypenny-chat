@@ -1,5 +1,13 @@
 # Moneypenny Chat changelog
 
+## 0.4.6 - 26 Nov 2026 - round 11 fixes, from two independent reviews of 0.4.5 (head 7d299c3)
+- AI notes: the note is made plain (NFKC, zero-width and soft-hyphen characters removed) before the link, secret and word checks and is stored in that plain form, so a link hidden with an invisible or full-width character is refused (`bad_note`). Accents are folded off for the word check ("d" + e-acute + "lete" is read as "delete"), and any letter left that is not a to z (Cyrillic, Greek, Devanagari, a dotless i) is refused.
+- The invisible characters in `core/src/noterules.js` are written as escapes, so the line can be read.
+- Widget source scan: a "//" is a comment only at the start of a line or after a space, so "a//b; localStorage.x = 1" is no longer hidden.
+- Tests: accent cases, link cases through the API, the stored plain form, the scan case; each of the four changes was removed once and the tests failed, then restored. KNOWLEDGE.md says the browser tests were not run on 0.4.4 to 0.4.6.
+- Notes: `docs/DECISIONS.md` round 11 lists what was fixed and what the boss judged and left.
+- Content commit: 27d4fd6. Version: 0.4.6. 426 tests in 37 files.
+
 ## 0.4.5 - 26 Nov 2026 - round 10 fixes, from two independent reviews of 0.4.4 (head d8d10fc)
 - AI notes word check (`core/src/noterules.js`): a note with a letter of any script other than Latin (Cyrillic, Greek, Devanagari and so on) is refused, because look-alike letters were not folded by NFKC and a note spelled with them had no listed word to find. Seven more verbs are listed (discard, trash, unsubscribe, refill, recharge, donate, fund).
 - Tests: honest wordings 37 to 54, the API test runs all four note types with several honest and refused wordings and checks nothing is stored on a refusal, a test for look-alike letters (it fails without the new check). The widget source scan also flags indexedDB, sendBeacon, XMLHttpRequest, WebSocket, EventSource, cache storage and a storage name built from pieces.
