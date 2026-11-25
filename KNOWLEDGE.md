@@ -1,6 +1,6 @@
 # Knowledge: what was proven and how
 
-## Proven in Chromium (0.4.2): `bun run test:browser`
+## Proven in Chromium (0.4.2, run again on 0.4.3 with the same result: 15 tests): `bun run test:browser`
 Playwright Chromium loads the BUILT widget file (the file `scripts/build-widget.mjs` writes) on a product page. The real instance Worker, the real core on the real SQL schema (bun:sqlite) and a product double answer. Only the network wire is replaced: Playwright routes the https page origin to those functions, so the browser keeps its own Origin, Referer, cookie, clipboard and secure-context rules. Server time is moved with `rig.travel()` and the same sweep the hourly cron runs is called. See `tests/browser/rig.mjs`.
 - **Loads:** headers of `/mpc/widget.js` (text/javascript, 300 s, no cookie, no CORS header); one shadow-root host and nothing else in the page; no cookie set, no localStorage, sessionStorage, IndexedDB or cache entry; no console error. Every control is 44 px or more; Tab order, Enter, Escape and focus return work; text and buttons have contrast of 4.5 or more. A product style sheet that hides every button, heading and label and shrinks all text does not change the widget.
 - **Consent step:** the notice shows a Terms link (new tab, noopener) when the instance has a Terms page, and no link when it has none (all three instances: none yet). No tick box, radio, aria-checked or "agree" word on any of 13 screens; no Hindi line; every screen passes the owner word rules. Nothing leaves the page before Send.
@@ -17,12 +17,12 @@ Playwright Chromium loads the BUILT widget file (the file `scripts/build-widget.
 - Page CSS such as `* { font-size: 3px }` reaches the host element and the widget inherited from it. A first fix (`all: initial`) also made the widget show up in pictures; the browser caught that too (the widget keeps `visibility` from its host now).
 
 ## Still not proven
-- `wrangler deploy`, the routes, and the real Cloudflare parts (Durable Object, D1, R2, Cloudflare Access, mail service). A real product session answer. The team page in a browser.
+- `wrangler deploy`, the routes, and the real Cloudflare parts (Durable Object, D1, R2, Cloudflare Access, mail service). The cron entry (`scheduled`), with and without the picture bucket, is tested on stand-ins: D1 is the real SQL on bun:sqlite, R2 is a map, the clock is moved with `setSystemTime`. A real product session answer. The team page in a browser.
 - Firefox and Safari; phones. A page with a strict Content-Security-Policy (the widget needs `style-src` to allow its own style element).
 - CORS as the browser enforces it: Playwright's routing makes cross-origin calls pass, so only "the instance sends no CORS header and refuses a foreign Origin" is tested, not the browser's block.
 - A DOM-to-pixels engine: none is shipped. The widget shows no screenshot button; masking is proven for the library and a stand-in engine only.
 - Open for the owner (see `docs/DECISIONS.md`, round 7): links made by the widget hold `read_event` and `read_ticket` only, so an AI cannot post notes through them (the note call needs `report`); the AI page address points at the first allowed origin and no route in this repo serves `/ai/` there; "Check status" can be used once per sent screen.
 
 ## Run
-`bun run test` (secrets scan first, then the fast unit tests). `bun run test:browser` (needs Playwright and its Chromium; see `README.md`). `bun run test:all` runs both. The Worker entry test writes `instances/<id>/dist/widget.js` (ignored by git); `bun scripts/build-widget.mjs` writes it too.
+`bun run test` (secrets scan first, then the fast unit tests; 428 tests in 37 files at 0.4.3). Since 0.4.3 it also scans the widget source for cookie, storage and third-party fetch (`core/tests/widget-static.test.js`); that is a text scan, the browser run is the proof. `bun run test:browser` (needs Playwright and its Chromium; see `README.md`). `bun run test:all` runs both. The Worker entry test writes `instances/<id>/dist/widget.js` (ignored by git); `bun scripts/build-widget.mjs` writes it too.
 The git history scan (`bun scripts/history-scan.mjs .`) was already red on the head of PR 1: two old commits (C1 to C3 and audit fixes 1) hold fake sample e-mail and phone numbers in test files that the tree scan exempts. This PR adds none.

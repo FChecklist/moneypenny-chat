@@ -1,6 +1,6 @@
 {
   "name": "moneypenny-chat",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "type": "module",
   "description": "Moneypenny Chat: Need help, Suggest an option or feature, Stuck: tell where.",

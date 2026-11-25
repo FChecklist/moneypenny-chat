@@ -147,5 +147,5 @@ test('the proxy sets no cookie on any answer (ticket, refusal, error, link, conf
   seen.push(await r.post('/mpc/v1/tickets', TICKET), await r.post('/mpc/v1/tickets', 'not json'), await r.post('/mpc/v1/tickets', TICKET, { tok: 'player-1' }), await r.post('/mpc/v1/tickets', TICKET, { origin: 'https://evil.example' }),
     await r.post('/mpc/ai-link', { kind: 'help' }), await r.post('/mpc/ai-link', { kind: 'nope' }), await r.handle(new Request('https://i.test/mpc/config.json')), await r.handle(new Request('https://i.test/mpc/other')));
   expect(seen.map((x) => x.status)).toEqual([201, 400, 403, 403, 201, 400, 200, 404]); for (const x of seen) expect(x.headers.get('set-cookie')).toBeNull();
-  expect(readFileSync(new URL('../lib/proxy.js', import.meta.url), 'utf8')).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.4.2'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.4.2');
+  expect(readFileSync(new URL('../lib/proxy.js', import.meta.url), 'utf8')).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.4.3'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.4.3');
 });
