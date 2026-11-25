@@ -30,7 +30,7 @@ Interface the instance Worker uses (reference: `instances/lib/adapter.js`, `http
 - A product that cannot give a role for a page (static pages) must answer `401`. Do not trust a role in the page, a query or a body.
 
 ## Instance proxy routes the widget uses (0.4.2)
-Browser to instance Worker, same host, path `/mpc/*`. All need an allowed `Origin`, except a same-origin GET, which a browser sends with no Origin: it is accepted on `Sec-Fetch-Site: same-origin` (or a Referer of the same origin) on an allowed host.
+Browser to instance Worker, same host, path `/mpc/*`. All need an allowed `Origin`, except a same-origin GET, which a browser sends with no Origin: it is accepted on `Sec-Fetch-Site: same-origin` (or an https Referer of the same origin) on an allowed host.
 - `POST /mpc/v1/tickets` and `POST /mpc/v1/screenshots`: the body goes to the core; the role comes from the product session, never from the page. `Idempotency-Key` must be a UUID.
 - `GET /mpc/v1/tickets/{ticket}` with header `x-mpc-status-token`: Check status.
 - `POST /mpc/ai-link` `{kind, ticket?, screen?}`: when `ticket` is named, header `x-mpc-status-token` (the token returned when the ticket was made) is required; without it, or with a wrong one, the answer is 403 `not_yours` and no key is made. The token is passed to the core on the ticket read and the link call only, never to the product.

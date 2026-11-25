@@ -61,6 +61,7 @@ test('0.4.2 origin rule: a browser sends no Origin on a same-origin GET, so a GE
   expect(await code(get({ 'sec-fetch-site': 'cross-site', referer: ORIGIN + '/console/create' }, null))).toBe(403); // the browser says cross-site: the Referer does not matter
   expect(await code(get({ 'sec-fetch-site': 'same-site' }, null))).toBe(403); expect(await code(get({ 'sec-fetch-site': 'none' }, null))).toBe(403);
   expect(await code(get({ referer: 'https://evil.example/page' }, null))).toBe(403); expect(await code(get({ referer: 'not a url' }, null))).toBe(403);
+  expect(await code(get({ referer: 'blob:' + ORIGIN + '/1234-5678' }, null))).toBe(403); expect(await code(get({ referer: ORIGIN.replace('https:', 'http:') + '/console' }, null))).toBe(403); // a blob: address has the origin inside it; a plain http page is not this origin
   expect(await code(get({}, null))).toBe(403);                                                                    // curl: no Origin and nothing from a browser (as before)
   expect(await code(get({ 'sec-fetch-site': 'same-origin' }, 'https://evil.example'))).toBe(403);                 // a wrong Origin is refused whatever else is said
   expect(await code(get({}, ORIGIN))).toBe(200);                                                                  // an allowed Origin: as before

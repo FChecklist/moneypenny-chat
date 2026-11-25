@@ -18,12 +18,18 @@ export async function eraseTicketNow(ctx, instance, number, who) {
   if (ok) await ctx.store.audit({ at: now, instance, ticket: number, action: 'ticket_erased', who });
   return ok;
 }
-// The sweep: runs hourly (cron in wrangler.toml). Erases due files and tickets, and old idempotency rows.
+// The sweep: runs hourly (cron in wrangler.toml). Erases due files and tickets, expired AI links and old idempotency rows.
+// 0.4.2: the database-only jobs (links, idempotency rows) run FIRST and every job is isolated, so a file store that is down (R2) cannot keep a link, its notes or its
+// session hash past their time, and one file that cannot be deleted does not stop the others. The first fault is thrown at the end, so the cron run is marked failed.
 export async function sweep(ctx, now = ctx.now()) {
-  const out = { shots: 0, tickets: 0 };
-  for (const s of await ctx.store.dueShots(now)) { await ctx.blobs.delete(s.key); await ctx.store.dropShots([s.id]); await ctx.store.audit({ at: now, instance: s.instance, ticket: s.ticket && s.ticket !== 'claim' ? s.ticket : null, action: 'screenshot_erased', who: 'system' }); out.shots++; }
-  for (const t of await ctx.store.dueTickets(now)) if (await eraseTicketNow({ ...ctx, now: () => now }, t.instance, t.number, 'system')) out.tickets++;
-  await ctx.store.eraseExpiredLinks(now); // every AI link, with a ticket or without, goes with its notes and calls when the link expires (a link lives 24 hours at most)
-  await ctx.store.expireIdem(now);
+  const out = { shots: 0, tickets: 0 }; let fault = null;
+  const run = async (job) => { try { await job(); } catch (e) { fault ||= e; } };
+  await run(() => ctx.store.eraseExpiredLinks(now)); // every AI link, with a ticket or without, goes with its notes and calls when the link expires (a link lives 24 hours at most)
+  await run(() => ctx.store.expireIdem(now));
+  let shots = []; await run(async () => { shots = await ctx.store.dueShots(now); });
+  for (const s of shots) await run(async () => { await ctx.blobs.delete(s.key); await ctx.store.dropShots([s.id]); await ctx.store.audit({ at: now, instance: s.instance, ticket: s.ticket && s.ticket !== 'claim' ? s.ticket : null, action: 'screenshot_erased', who: 'system' }); out.shots++; });
+  let tickets = []; await run(async () => { tickets = await ctx.store.dueTickets(now); });
+  for (const t of tickets) await run(async () => { if (await eraseTicketNow({ ...ctx, now: () => now }, t.instance, t.number, 'system')) out.tickets++; });
+  if (fault) throw fault;
   return out;
 }

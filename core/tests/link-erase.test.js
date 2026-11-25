@@ -3,7 +3,7 @@
 // row (session hash), notes and call log until the ticket itself was erased (up to 90 days on a records product). Time-travel tests: the clock is moved,
 // then the same sweep the hourly cron runs is called. Both stores run (the D1 one is the real SQL on the real schema in bun:sqlite).
 import { test, expect, setSystemTime, afterEach } from 'bun:test';
-import { makeEnv, fixture, STORES, fakeD1, fakeNamespace, SECRET, ASSERT } from './helpers.js';
+import { makeEnv, fixture, STORES, fakeD1, fakeNamespace, SECRET, ASSERT, PNG } from './helpers.js';
 import { sweep } from '../src/retention.js';
 import { sha256hex } from '../src/crypto.js';
 import core from '../src/index.js';
@@ -69,6 +69,23 @@ for (const store of Object.keys(STORES)) {
     await e.store.eraseTicket(PRODUCT, a.ticket, T0 + 10); // notes and calls of the ticket go with it; the link row waits for its expiry
     expect((await e.store.getLink(a.id))).not.toBeNull();
     e.clock.t = T0 + H; await sweep(e.ctx()); await gone(e, a);
+  });
+  // Review finding (0.4.2): the sweep ran the file jobs first, and one throw stopped everything after it, so a file store that is down kept the links, their notes and
+  // the session hash past their time. The database-only jobs now run first and every job is isolated; the first fault is still thrown, so the cron run is marked failed.
+  test(`[${store}] a file store that is down cannot keep an expired link, its notes or its calls; one file that cannot be deleted does not stop the others; the fault is still reported`, async () => {
+    const e = rig({ retention_class: 'games' });
+    const up = async (sess) => (await (await e.call('POST', '/v1/screenshots', undefined, { rawBody: PNG, signedBody: PNG, ctype: 'image/png', sess })).json()).screenshot_id;
+    const t1 = await (await e.call('POST', '/v1/tickets', { ...fixture('ticket-suggest.json'), screenshot_id: await up('sess-sweep-1') }, { sess: 'sess-sweep-1' })).json();
+    const t2 = await (await e.call('POST', '/v1/tickets', { ...fixture('ticket-suggest.json'), screenshot_id: await up('sess-sweep-2') }, { sess: 'sess-sweep-2' })).json();
+    const a = await ticketless(e, 'a', 3600), b = await ticketed(e, 'b', 3600); for (const l of [a, b]) await chat(e, l);
+    const key1 = (await e.store.shotsOfTicket(PRODUCT, t1.ticket))[0].key, real = e.blobs.delete;
+    e.blobs.delete = async (k) => { if (k === key1) throw new Error('r2 down for this file'); return real(k); }; // the bucket refuses one file
+    e.clock.t = T0 + 25 * H; // links are long gone by their time, both tickets are due too
+    await expect(sweep(e.ctx())).rejects.toThrow('r2 down'); // the run reports the fault ...
+    await gone(e, a); await gone(e, b);                       // ... and the links, notes and calls are erased all the same
+    expect(await e.store.getTicket(PRODUCT, t2.ticket, 0)).toBeNull(); // the other ticket (and its file) was erased: one bad file did not stop it
+    expect((await e.store.shotsOfTicket(PRODUCT, t1.ticket)).length).toBe(1); // the one that failed stays for the next hour
+    e.blobs.delete = real; const r = await sweep(e.ctx()); expect(r.tickets).toBe(1); expect(e.blobs.keys()).toEqual([]); // the bucket is back: it goes
   });
 }
 

@@ -55,7 +55,7 @@ export function createInstance({ config, strings, secrets, product, core, now = 
   const sameOriginGet = (req) => {
     const here = new URL(req.url).origin; if (!origins.has(here)) return false;
     const sfs = req.headers.get('sec-fetch-site'); if (sfs) return sfs === 'same-origin';
-    try { return new URL(req.headers.get('referer') || '').origin === here; } catch { return false; }
+    try { const r = new URL(req.headers.get('referer') || ''); return r.protocol === 'https:' && r.origin === here; } catch { return false; } // not a blob: address, whose origin is the one inside it
   };
   const person = async (req) => { // who is asking: from the product server, never from the page
     const s = await product.session(req);
