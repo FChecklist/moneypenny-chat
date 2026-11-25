@@ -1,0 +1,65 @@
+// 0.4.3 (review of 0.4.2): the browser tests (`bun run test:browser`) check that the widget uses no cookie, no storage and no third-party address, but they are not part of
+// the default `bun run test`. This is the cheap guard that IS: it reads the widget source (core/widget, every .js file, the screenshot library too) and fails if it finds
+// document.cookie, localStorage, sessionStorage, or a fetch( to anything but a path on the page's own site. Comments are ignored, so a comment may still say "no cookies".
+// It is a plain text scan, not a proof: the browser tests stay the real check (see docs/DECISIONS.md, round 8).
+import { test, expect } from 'bun:test';
+import { readFileSync, readdirSync } from 'node:fs';
+
+const DIR = new URL('../widget/', import.meta.url);
+const files = (d = DIR, prefix = '') => readdirSync(d, { withFileTypes: true }).flatMap((e) => (e.isDirectory() ? files(new URL(e.name + '/', d), prefix + e.name + '/') : e.name.endsWith('.js') ? [prefix + e.name] : []));
+// Code only: block comments and line comments removed. 0.4.6: a "//" counts as a comment only at the start of a line or after a space, so "a//b" or a web address inside a string
+// does not hide the rest of its line.
+const code = (src) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/.*$/gm, '$1');
+
+// Returns a list of problems found in one file's source text.
+export function scan(src) {
+  const c = code(src), out = [];
+  if (/\bdocument\s*\.\s*cookie\b/.test(c)) out.push('document.cookie');
+  if (/\blocalStorage\b/.test(c)) out.push('localStorage');
+  if (/\bsessionStorage\b/.test(c)) out.push('sessionStorage');
+  // 0.4.5 (review of 0.4.4): the other ways a page script can keep something or call a third party, and a storage name built from two pieces. Still a text scan:
+  // the browser tests stay the real check.
+  if (/\bindexedDB\b/.test(c)) out.push('indexedDB');
+  if (/\bsendBeacon\b/.test(c)) out.push('sendBeacon');
+  if (/\bXMLHttpRequest\b/.test(c)) out.push('XMLHttpRequest');
+  if (/\bWebSocket\b/.test(c)) out.push('WebSocket');
+  if (/\bEventSource\b/.test(c)) out.push('EventSource');
+  if (/\bcaches\s*\.\s*(?:open|put|match)\b/.test(c)) out.push('cache storage');
+  if (/\[\s*['"`][^'"`]*['"`]\s*\+\s*['"`](?:Storage|cookie)['"`]/i.test(c)) out.push('a storage name built from pieces');
+  for (const m of c.matchAll(/\bfetch\s*\(\s*([^)]*)/g)) { // the first argument: a path on this site is fine; a variable or the spread of arguments is fine (the address was set elsewhere, and any literal address there is caught below)
+    const a = m[1].trim();
+    if (/^['"`]/.test(a) && !/^['"`]\/(?!\/)/.test(a)) out.push('fetch to ' + a.slice(0, 40)); // a quoted address that does not start with a single "/"
+  }
+  if (/['"`]\s*(?:https?:)?\/\/[a-z0-9]/i.test(c)) out.push('a written-out web address'); // no third-party address is written into the widget; the Terms link comes from the instance record
+  return out;
+}
+
+test('the scan itself works: it flags each forbidden thing and lets a same-site fetch and comments through', () => {
+  expect(scan("const x = document.cookie;")).toEqual(['document.cookie']);
+  expect(scan("document . cookie = 'a=b'")).toEqual(['document.cookie']);
+  expect(scan("localStorage.setItem('a', 1)")).toEqual(['localStorage']);
+  expect(scan("window.sessionStorage.getItem('a')")).toEqual(['sessionStorage']);
+  expect(scan("const r = a//b; localStorage.x = 1")).toEqual(['localStorage']); // 0.4.6: "a//b" is not a comment, so the rest of its line is still read
+  expect(scan("const p = 'https://x.example/a'; document.cookie = 'a=1'")).toEqual(['document.cookie', 'a written-out web address']);
+  expect(scan("indexedDB.open('x')")).toEqual(['indexedDB']);
+  expect(scan("navigator.sendBeacon('/x', data)")).toEqual(['sendBeacon']);
+  expect(scan('const r = new XMLHttpRequest();')).toEqual(['XMLHttpRequest']);
+  expect(scan("new WebSocket('wss://x.example')").length).toBeGreaterThan(0);
+  expect(scan("new EventSource('/events')")).toEqual(['EventSource']);
+  expect(scan("caches.open('v1')")).toEqual(['cache storage']);
+  expect(scan("window['local' + 'Storage'].setItem('a', 1)")).toEqual(['a storage name built from pieces']);
+  expect(scan("fetch('https://tracker.example/hit')").length).toBeGreaterThan(0);
+  expect(scan("fetch('//tracker.example/hit')").length).toBeGreaterThan(0);
+  expect(scan('fetch(`https://tracker.example/${id}`)').length).toBeGreaterThan(0);
+  expect(scan("fetch('relative/path')").length).toBeGreaterThan(0); // not a path on this site's root
+  expect(scan("await fetch('/mpc/ai-link', { method: 'POST' })")).toEqual([]);
+  expect(scan('const f = (...a) => fetch(...a);')).toEqual([]);
+  expect(scan("// no cookies, no localStorage, no fetch('https://x.example')\n/* document.cookie */ const ok = 1;")).toEqual([]);
+});
+
+test('0.4.3 the widget source has no document.cookie, no localStorage, no sessionStorage, and no fetch to a third-party address', () => {
+  const list = files(); expect(list.length).toBeGreaterThanOrEqual(10); // the scan really read the widget (api, boot, model, widget, css, and the screenshot library)
+  expect(list).toContain('api.js'); expect(list).toContain('boot.js'); expect(list).toContain('shot/capture.js');
+  const found = {}; for (const f of list) { const p = scan(readFileSync(new URL(f, DIR), 'utf8')); if (p.length) found[f] = p; }
+  expect(found).toEqual({});
+});

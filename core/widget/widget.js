@@ -55,7 +55,7 @@ export function mountWidget(cfg) {
   function sync() { const v = view(st, dyn()); const bs = [...panel.querySelectorAll('button')]; for (const c of v.controls) if (c.kind === 'button' && (c.id === 'send' || c.id === 'next')) { const b = bs.find((x) => x.textContent === c.label); if (b) { b.disabled = !!c.disabled; b.setAttribute('aria-disabled', String(!!c.disabled)); } } }
   function say(msg) { live.textContent = msg; }
   async function copyLink(kind) {
-    try { const url = await cfg.aiLink(kind, { ticket: st.sent && st.sent.ticket, topic: st.topic }); await (cfg.clipboard || navigator.clipboard).writeText(url); say('Link copied.'); } catch { say('Could not copy. Try again.'); }
+    try { const url = await cfg.aiLink(kind, { ticket: st.sent && st.sent.ticket, topic: st.topic, token: st.sent && typeof api.token === 'function' ? api.token() : null }); await (cfg.clipboard || navigator.clipboard).writeText(url); say('Link copied.'); } catch { say('Could not copy. Try again.'); }
   }
   async function act(id) {
     if (id === 'shot') return shot();

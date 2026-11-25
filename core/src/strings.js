@@ -24,7 +24,7 @@ export const AI_ERRORS = {
   bad_link: { status: 401, message: 'This link is not valid.', next: 'Ask the organizer to copy a new link.' },
   expired: { status: 401, message: 'This link has ended.', next: 'Ask the organizer to copy a new link.' },
   revoked: { status: 401, message: 'The organizer stopped this link.', next: 'Stop. Do not retry.' },
-  forbidden_action: { status: 403, message: 'This action is not allowed for an AI. Payments, identity changes and deleting are never allowed.', next: 'Tell the organizer a person must do it. Post a blocked note.' },
+  forbidden_action: { status: 403, message: 'This action is not allowed for an AI. Payments, identity changes and deleting are never allowed.', next: 'Say what you saw or what is waiting, not an action to take. For example: "paused", "waiting for a person to decide", "the page did not load". Then post the note again.' },
   out_of_scope: { status: 403, message: 'This action is outside the scopes of this link.', next: 'Check the scopes in step 2.' },
   ticket_gone: { status: 404, message: 'The ticket was erased.', next: 'Stop.' },
   plan_not_approved: { status: 409, message: 'The organizer has not approved the plan yet.', next: 'Wait and call step 2 again after 30 seconds.' },

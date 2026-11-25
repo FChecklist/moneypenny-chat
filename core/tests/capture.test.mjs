@@ -1,6 +1,5 @@
 // C12: capture library, secret masking and the editor. No browser ran: a small fake DOM and plain pixel arrays are used (see KNOWLEDGE.md).
 import { test, expect } from 'bun:test';
-import { readFileSync, readdirSync } from 'node:fs';
 import { isSecretField, maskSecrets } from '../widget/shot/mask.js';
 import { applyBoxes, fitImage, clampBox } from '../widget/shot/pixels.js';
 import { createEditor, mountEditor } from '../widget/shot/editor.js';
@@ -95,7 +94,32 @@ test('S-067 end to end: capture masks, the person hides a part, a blob comes out
   doc.body.children.length = 0; p = mk()(); await new Promise((r) => setTimeout(r, 0)); doc.body.children[0].all('button').find((x) => x.textContent === 'Discard').onclick(); expect(await p).toBeNull();
   expect(await mk({ render: async () => { throw new Error('x'); } })()).toBeNull(); expect(pw.value).toBe('hunter2'); expect(await mk({ blocked: () => true })()).toBeNull();
 });
-test('C12 editor text passes the owner string rules; no checkbox; no cookies or storage in the new code', () => {
+test('C12 editor text passes the owner string rules; no tick box on the editor screen', () => {
   expect(checkStrings(EDITOR)).toEqual([]); expect(checkStrings({ ...EDITOR, undo: 'Undo my box' }).length).toBe(1);
-  for (const f of readdirSync(new URL('../widget/shot', import.meta.url))) { const t = readFileSync(new URL('../widget/shot/' + f, import.meta.url), 'utf8'); expect(t).not.toMatch(/document\.cookie|localStorage|sessionStorage|indexedDB|fetch\(|XMLHttpRequest|sendBeacon/); expect(t).not.toMatch(/type\s*=\s*['"]checkbox/); }
+  const doc = fakePage([]), m = mountEditor({ doc, target: doc.body, image: solid(10, 10), imageData: (d) => d, onDone: () => {} }); // the real DOM of the editor is scanned in tests/browser/masking.browser.mjs
+  expect(m.box.all().some((e) => e.attrs.type === 'checkbox' || e.attrs.type === 'radio' || e.attrs.role === 'checkbox')).toBe(false);
+});
+// 0.4.2: the 0.4.0 test searched the source for network, cookie and storage words. This one runs a whole capture while all of them throw.
+async function doorTestBody() {
+  const doors = ['fetch', 'XMLHttpRequest', 'WebSocket', 'localStorage', 'sessionStorage', 'indexedDB'], saved = doors.map((d) => Object.getOwnPropertyDescriptor(globalThis, d)), savedNav = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  for (const d of doors) Object.defineProperty(globalThis, d, { configurable: true, get() { throw new Error('capture touched ' + d); } });
+  try {
+    const pw = new El('input', { type: 'password', value: 'hunter2' }, { x: 0, y: 0, width: 10, height: 10 }), doc = fakePage([pw]); Object.defineProperty(doc, 'cookie', { get() { throw new Error('read cookie'); }, set() { throw new Error('set cookie'); } });
+    const nav = { sendBeacon() { throw new Error('beacon'); } }; Object.defineProperty(globalThis, 'navigator', { configurable: true, value: nav });
+    const p = makeCapture({ doc, render: async () => solid(100, 100), toBlob: async () => ({ size: 5, type: 'image/jpeg' }), imageData: (d) => d })(); await new Promise((r) => setTimeout(r, 0));
+    doc.body.children[0].all('button').find((x) => x.textContent === 'Use picture').onclick(); expect((await p).size).toBe(5); expect(pw.value).toBe('hunter2');
+    const q = makeCapture({ doc, render: async () => solid(100, 100), toBlob: async () => ({ size: 5 }), imageData: (d) => d })(); await new Promise((r) => setTimeout(r, 0));
+    doc.body.children[1].all('button').find((x) => x.textContent === 'Discard').onclick(); expect(await q).toBeNull();
+  } finally { doors.forEach((d, i) => (saved[i] ? Object.defineProperty(globalThis, d, saved[i]) : delete globalThis[d])); if (savedNav) Object.defineProperty(globalThis, 'navigator', savedNav); else delete globalThis.navigator; }
+}
+test('C12 the library sends nothing and touches no cookie or storage: a whole capture runs with every such door throwing', doorTestBody);
+// 0.4.4: self-contained. A known navigator is defined here, the door test body runs, and the navigator must be exactly the one defined (the old `delete globalThis.navigator` removed it).
+test('0.4.4 the door test body puts a known global navigator back exactly as it was', async () => {
+  const known = { sentinel: 'known-navigator' }, original = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value: known });
+  try {
+    await doorTestBody();
+    const now = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+    expect(now).toBeDefined(); expect(now.value).toBe(known); expect(globalThis.navigator.sentinel).toBe('known-navigator');
+  } finally { if (original) Object.defineProperty(globalThis, 'navigator', original); else delete globalThis.navigator; }
 });

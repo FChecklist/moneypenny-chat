@@ -88,7 +88,7 @@ async function shot(ctx, req, path) {
   if (!a.ok) return fail(a.error);
   const addr = req.headers.get('x-mpc-ip');
   if (!addr && inst.require_ip === true) return fail('bad_request', { field: 'x-mpc-ip' });
-  return out(await uploadShot(ctx, inst, { bytes, contentType: req.headers.get('content-type'), idemHeader: req.headers.get('idempotency-key'), ip: addr || 'sess:' + (await sha256hex(a.sess)) }));
+  return out(await uploadShot(ctx, inst, { bytes, contentType: req.headers.get('content-type'), idemHeader: req.headers.get('idempotency-key'), ip: addr || 'sess:' + (await sha256hex(a.sess)), sess: a.sess }));
 }
 
 // S-040 and S-041: the team page. Same login as the team calls. No external scripts: the page loads one file from the same origin.
@@ -136,9 +136,16 @@ export default {
     return createApp(build(env, exec))(req);
   },
   // Hourly (cron in wrangler.toml): erase what is due, then try queued team mail again.
+  // 0.4.4: only DB is needed. The sweep does not use the limiter, so a missing LIMITS must not skip the erase. A missing DB throws, so the cron run shows as failed.
+  // A missing file bucket (SHOTS) skips the picture steps and nothing else, so links, notes, call logs, idempotency rows and tickets are still erased on time.
+  // A fault in the sweep never stops the mail retry; the first fault is thrown once both have run, so the cron run is still marked failed.
   async scheduled(_event, env) {
-    if (!env.DB || !env.LIMITS || !env.SHOTS) return;
+    if (!env || !env.DB) throw new Error('scheduled run failed: binding DB is missing, so nothing was erased and no mail was retried. Fix the Worker bindings.');
+    if (!env.SHOTS) console.warn('scheduled run: binding SHOTS (the picture bucket) is missing. Pictures are not erased in this run; everything else is.');
     const ctx = build(env); ctx.now = Date.now;
-    await sweep(ctx); await retryMail(ctx);
+    let fault = null;
+    try { const r = await sweep(ctx); if (r.held) console.warn(`scheduled run: ${r.held} ticket(s) with a picture kept until the picture bucket is back.`); } catch (e) { fault = e; }
+    try { await retryMail(ctx); } catch (e) { fault ||= e; }
+    if (fault) throw fault;
   },
 };

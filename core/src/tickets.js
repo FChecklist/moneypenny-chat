@@ -5,7 +5,7 @@ import { cleanPath, segmentsFromRoutes, screenLabel } from './path.js';
 import { scrub } from './scrub.js';
 import { eraseAtCreate, eraseAtDone } from './retention.js';
 import { FALLBACK_SCREEN } from './strings.js';
-import { SHOT_ID } from './shots.js';
+import { SHOT_ID, shotSess } from './shots.js';
 import { audit } from './audit.js';
 import { eraseTicketNow, shotEraseAt } from './retention.js';
 
@@ -85,7 +85,7 @@ export async function createTicket(ctx, inst, { raw, b, a, idemHeader, ip }) {
   const token = randomToken(32), tokenHash = await sha256hex(token), erase = eraseAtCreate(inst.retention_class, now);
   let claimed = false; // C4: take the screenshot for this ticket first, so two tickets can never share one file
   if (t.shot) {
-    try { claimed = await ctx.store.claimShot(inst.id, t.shot, now); } catch (e) { await give(ctx, lim.taken).catch(() => {}); throw e; }
+    try { claimed = await ctx.store.claimShot(inst.id, t.shot, await shotSess(inst, a.sess), now); } catch (e) { await give(ctx, lim.taken).catch(() => {}); throw e; } // only the session that uploaded the file may claim it
     if (!claimed) { await give(ctx, lim.taken); return { error: 'bad_request', extra: { field: 'screenshot_id' } }; }
   }
   const sealed = await encryptText(ctx.secrets(inst.id, 'sign')[0], token);

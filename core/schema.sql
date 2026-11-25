@@ -43,8 +43,10 @@ CREATE TABLE IF NOT EXISTS shot (
   ctype TEXT NOT NULL,
   ticket TEXT,                     -- null = unattached; 'claim' = being attached right now; else the ticket number
   created INTEGER NOT NULL,
-  erase_at INTEGER NOT NULL        -- unattached: created + 1 hour
+  erase_at INTEGER NOT NULL,       -- unattached: created + 1 hour
+  sess_hash TEXT                   -- sha256 of instance|shot|session of the uploader: only that session may attach the file (0.4.2). A row without it can never be claimed.
 );
+-- A database made from the 0.4.1 schema needs ALTER TABLE shot ADD COLUMN sess_hash TEXT once (nothing is deployed yet, so no live database needs it)
 CREATE INDEX IF NOT EXISTS shot_erase ON shot (erase_at);
 -- Every state change leaves one row here. No text, no person.
 CREATE TABLE IF NOT EXISTS audit (
@@ -88,3 +90,6 @@ CREATE TABLE IF NOT EXISTS ai_note (
   PRIMARY KEY (link_id, n)
 );
 CREATE TABLE IF NOT EXISTS ai_call_log (link_id TEXT NOT NULL, at INTEGER NOT NULL, method TEXT NOT NULL, path_class TEXT NOT NULL, code INTEGER NOT NULL);
+-- The hourly sweep finds links by expiry and their calls by link id (0.4.2).
+CREATE INDEX IF NOT EXISTS ai_link_expires ON ai_link (expires);
+CREATE INDEX IF NOT EXISTS ai_call_log_link ON ai_call_log (link_id);

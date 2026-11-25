@@ -16,10 +16,13 @@ export function sniff(b) {
   return null;
 }
 export const shotKey = (instance, id) => `${instance}/${id}`; // random id, never a user file name
+// Who may attach a file to a ticket: the session that uploaded it, in this instance. Stored as a hash, never the session id itself (same idea as the AI link owner).
+export const shotSess = (inst, sess) => sha256hex(inst.id + '|shot|' + sess);
 
-// bytes: Uint8Array (already within the 2 MB read limit). Returns {status, body, headers} | {error, extra}.
-export async function uploadShot(ctx, inst, { bytes, contentType, idemHeader, ip }) {
+// bytes: Uint8Array (already within the 2 MB read limit). sess: the session of the verified role proof (the owner of the file). Returns {status, body, headers} | {error, extra}.
+export async function uploadShot(ctx, inst, { bytes, contentType, idemHeader, ip, sess }) {
   const now = ctx.now(), key = parseKey(idemHeader);
+  if (typeof sess !== 'string' || !sess) return { error: 'no_assertion' }; // a file with no owner could be claimed by nobody: refuse it up front
   if (!key) return { error: 'bad_request', extra: { field: 'idempotency-key' } };
   if (!ctx.blobs) return { error: 'try_later' };
   const ctype = String(contentType || '').split(';')[0].trim().toLowerCase();
@@ -34,7 +37,7 @@ export async function uploadShot(ctx, inst, { bytes, contentType, idemHeader, ip
   const id = randomToken(16), k = shotKey(inst.id, id);
   try {
     await ctx.blobs.put(k, bytes, ctype);
-    try { await ctx.store.putShot({ id, instance: inst.id, key: k, bytes: bytes.length, ctype, ticket: null, created: now, erase_at: now + UNATTACHED_MS }); }
+    try { await ctx.store.putShot({ id, instance: inst.id, key: k, bytes: bytes.length, ctype, ticket: null, created: now, erase_at: now + UNATTACHED_MS, sess_hash: await shotSess(inst, sess) }); }
     catch (e) { await ctx.blobs.delete(k).catch(() => {}); throw e; }
     const body = { screenshot_id: id, bytes: bytes.length, expires: iso(now + UNATTACHED_MS) };
     await ctx.store.putIdem(inst.id, kh, bh, body, now); // two parallel uploads with one key may both store a file; the extra one is erased after 1 hour (see DECISIONS)

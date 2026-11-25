@@ -53,23 +53,23 @@ for (const store of Object.keys(STORES)) {
   });
   const send = async (e, shot, o = {}) => e.call('POST', '/v1/tickets', { ...fixture('ticket-suggest.json'), screenshot_id: shot }, o);
   test(`[${store}] S-028 one screenshot per ticket: a second ticket cannot use an attached file; unknown id; other instance`, async () => {
-    const e = E(); const { screenshot_id: id } = await (await up(e, PNG, 'image/png')).json();
+    const e = E(); const { screenshot_id: id } = await (await up(e, PNG, 'image/png', { sess: 'sess-aaaa-1' })).json(); // 0.4.2: the session that uploads is the one that attaches
     let r = await send(e, id, { sess: 'sess-aaaa-1' }); expect(r.status).toBe(201); const t = await r.json();
     expect((await e.store.getTicket('example-product', t.ticket, Date.now())).screenshot_id).toBe(id);
-    r = await send(e, id, { sess: 'sess-aaaa-2' }); expect(r.status).toBe(400); expect((await r.json()).field).toBe('screenshot_id');
+    r = await send(e, id, { sess: 'sess-aaaa-1' }); expect(r.status).toBe(400); expect((await r.json()).field).toBe('screenshot_id'); // the owner again: the file is already on a ticket
     expect((await send(e, 'A'.repeat(22), { sess: 'sess-aaaa-3' })).status).toBe(400);
     expect((await send(e, 'bad id', { sess: 'sess-aaaa-4' })).status).toBe(400);
   });
   test(`[${store}] S-028 a refused ticket gives the file back; a replay keeps it attached to the first ticket`, async () => {
-    const e = E(); const { screenshot_id: id } = await (await up(e, PNG, 'image/png')).json();
-    expect((await e.call('POST', '/v1/tickets', { ...fixture('ticket-suggest.json'), text: 'short', screenshot_id: id })).status).toBe(400);
+    const e = E(); const { screenshot_id: id } = await (await up(e, PNG, 'image/png', { sess: 'sess-bbbb-1' })).json();
+    expect((await e.call('POST', '/v1/tickets', { ...fixture('ticket-suggest.json'), text: 'short', screenshot_id: id }, { sess: 'sess-bbbb-1' })).status).toBe(400);
     const key = crypto.randomUUID(); expect((await send(e, id, { key, sess: 'sess-bbbb-1' })).status).toBe(201);
     expect((await send(e, id, { key, sess: 'sess-bbbb-1' })).headers.get('idempotent-replay')).toBe('true');
     expect((await e.store.shotsOfTicket('example-product', 'T-0001')).length).toBe(1);
   });
   test(`[${store}] S-029 an unattached file is erased after 1 hour (fake clock); an attached one is kept for the ticket`, async () => {
     let t = 1_800_000_000_000; const e = E({ now: () => t });
-    const a = (await (await up(e, PNG, 'image/png')).json()).screenshot_id, b = (await (await up(e, JPG, 'image/jpeg', { sess: 'sess-cccc-9' })).json()).screenshot_id;
+    const a = (await (await up(e, PNG, 'image/png', { sess: 'sess-cccc-2' })).json()).screenshot_id, b = (await (await up(e, JPG, 'image/jpeg', { sess: 'sess-cccc-1' })).json()).screenshot_id;
     expect((await send(e, b, { sess: 'sess-cccc-1' })).status).toBe(201);
     t += UNATTACHED_MS - 1; expect((await sweep({ store: e.store, blobs: e.blobs, now: () => t })).shots).toBe(0);
     t += 1; const r = await sweep({ store: e.store, blobs: e.blobs, now: () => t }); expect(r.shots).toBe(1);

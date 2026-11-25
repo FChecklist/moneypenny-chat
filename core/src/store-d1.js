@@ -56,19 +56,22 @@ export function d1Store(db) {
 
     // C4 screenshots, erase, audit
     async putIdem(instance, kh, bodyHash, response, now) { await db.prepare('INSERT OR IGNORE INTO idempotency (instance, key_hash, body_hash, response, expires) VALUES (?,?,?,?,?)').bind(instance, kh, bodyHash, JSON.stringify(response), now + IDEM_TTL_MS).run(); },
-    async putShot(r) { await db.prepare('INSERT INTO shot (id, instance, key, bytes, ctype, ticket, created, erase_at) VALUES (?,?,?,?,?,?,?,?)').bind(r.id, r.instance, r.key, r.bytes, r.ctype, r.ticket, r.created, r.erase_at).run(); },
+    async putShot(r) { await db.prepare('INSERT INTO shot (id, instance, key, bytes, ctype, ticket, created, erase_at, sess_hash) VALUES (?,?,?,?,?,?,?,?,?)').bind(r.id, r.instance, r.key, r.bytes, r.ctype, r.ticket, r.created, r.erase_at, r.sess_hash ?? null).run(); },
     async getShot(instance, id, now) { return (await db.prepare('SELECT * FROM shot WHERE instance=? AND id=? AND erase_at>?').bind(instance, id, now).first()) || null; },
-    async claimShot(instance, id, now) { return (await db.prepare("UPDATE shot SET ticket='claim' WHERE instance=? AND id=? AND ticket IS NULL AND erase_at>?").bind(instance, id, now).run()).meta.changes > 0; },
-    async attachShot(instance, id, number, eraseAt) { await db.prepare('UPDATE shot SET ticket=?, erase_at=? WHERE instance=? AND id=?').bind(number, eraseAt, instance, id).run(); },
+    // Keyed by instance AND session. A row with no sess_hash (NULL) never equals a hash, so an old row can never be claimed.
+    async claimShot(instance, id, sessHash, now) { if (typeof sessHash !== 'string' || !sessHash) return false; return (await db.prepare("UPDATE shot SET ticket='claim' WHERE instance=? AND id=? AND sess_hash=? AND ticket IS NULL AND erase_at>?").bind(instance, id, sessHash, now).run()).meta.changes > 0; },
+    async attachShot(instance, id, number, eraseAt) { await db.prepare('UPDATE shot SET ticket=?, erase_at=?, sess_hash=NULL WHERE instance=? AND id=?').bind(number, eraseAt, instance, id).run(); }, // the owner hash was only needed to claim: it is dropped once the file is on a ticket
     async releaseShot(instance, id) { await db.prepare("UPDATE shot SET ticket=NULL WHERE instance=? AND id=? AND ticket='claim'").bind(instance, id).run(); },
     async setShotErase(instance, number, eraseAt) { await db.prepare('UPDATE shot SET erase_at=? WHERE instance=? AND ticket=?').bind(eraseAt, instance, number).run(); },
     async shotsOfTicket(instance, number) { return (await db.prepare('SELECT * FROM shot WHERE instance=? AND ticket=?').bind(instance, number).all()).results; },
     async dueShots(now) { return (await db.prepare('SELECT * FROM shot WHERE erase_at<=?').bind(now).all()).results; },
     async dropShots(ids) { for (const id of ids) await db.prepare('DELETE FROM shot WHERE id=?').bind(id).run(); },
+    // Every link whose time is up goes, with its notes and call log: a link made for a ticket as well as one made without (privacy rule: 24 hours at most).
+    // One transaction: notes and calls first (they are found through the link row), then the link rows.
     async eraseExpiredLinks(now) {
-      const due = '(SELECT id FROM ai_link WHERE ticket IS NULL AND expires<=?)';
-      const r = await db.batch([db.prepare(`DELETE FROM ai_note WHERE link_id IN ${due}`).bind(now), db.prepare(`DELETE FROM ai_call_log WHERE link_id IN ${due}`).bind(now), db.prepare('DELETE FROM ai_link WHERE ticket IS NULL AND expires<=?').bind(now)]);
-      return r.length;
+      const due = '(SELECT id FROM ai_link WHERE expires<=?)';
+      const r = await db.batch([db.prepare(`DELETE FROM ai_note WHERE link_id IN ${due}`).bind(now), db.prepare(`DELETE FROM ai_call_log WHERE link_id IN ${due}`).bind(now), db.prepare('DELETE FROM ai_link WHERE expires<=?').bind(now)]);
+      return r[r.length - 1]?.meta?.changes ?? 0; // links erased (D1 reports it; the test double does not)
     },
     async dueTickets(now) { return (await db.prepare('SELECT instance, number FROM ticket WHERE erase_at<=?').bind(now).all()).results; },
     async eraseTicket(instance, number, now) {

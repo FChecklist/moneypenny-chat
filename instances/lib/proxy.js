@@ -32,15 +32,31 @@ export function createInstance({ config, strings, secrets, product, core, now = 
   const origins = new Set(config.allowed_origins);
   const roles = new Set([...Object.keys(config.role_map || {}), 'organizer', 'co-organizer']);
 
+  // STATUS TOKEN (decision 0.4.2: the proxy MUST pass it, to the core only, and only where it proves a ticket is the caller's own).
+  // Evidence: the core answers 404 without it when a ticket is read (tickets.js readTicket) or linked (ailink.js createLink); a ticket row keeps no session, only the
+  // hash of the token (schema.sql), and ticket numbers run in order, so neither the session nor the number can prove ownership. Safe choice: no token or a wrong one
+  // is a refusal (403 not_yours), never a link made without the ticket and never a guess. It is NOT copied on any other route, never sent to the product server,
+  // never put in a body, an address or an answer. The widget sends it as a header on the two calls (found in a real browser: 0.4.0 and 0.4.1 never sent it on the link call).
+  const statusToken = (req) => { const t = req.headers.get('x-mpc-status-token'); return t ? { 'x-mpc-status-token': t } : {}; };
   async function toCore(method, path, req, bodyBytes, who, extra = {}) {
     const ts = String(Math.floor(now() / 1000)), nonce = HEX(16), ip = req.headers.get('cf-connecting-ip') || req.headers.get('x-mpc-ip') || '';
     const body = bodyBytes ?? new Uint8Array(0);
     const h = { 'x-mpc-instance': config.id, 'x-mpc-ts': ts, 'x-mpc-nonce': nonce, 'x-mpc-sig': await sign(secrets.sign, { method, path, ts, nonce, body, ip }),
-      'x-mpc-assertion': await signAssertion(secrets.assert, { product: config.id, role: who.role, sess: who.sess, exp: Math.floor(now() / 1000) + 600 }), ...extra };
+      'x-mpc-assertion': await signAssertion(secrets.assert, { product: config.id, role: who.role, sess: who.sess, exp: Math.floor(now() / 1000) + 600 }) };
     if (ip) h['x-mpc-ip'] = ip;
-    for (const k of ['idempotency-key', 'content-type', 'x-mpc-status-token', 'dnt', 'sec-gpc']) if (req.headers.get(k)) h[k] = req.headers.get(k); // DNT and GPC must reach the core
+    for (const k of ['idempotency-key', 'content-type', 'dnt', 'sec-gpc']) if (req.headers.get(k)) h[k] = req.headers.get(k); // DNT and GPC must reach the core
+    Object.assign(h, extra); // what the caller says wins over what the browser sent
     return core.fetch(new Request('https://core.internal' + path, { method, headers: h, body: method === 'GET' ? undefined : body }));
   }
+  // A browser adds no Origin header to a same-origin GET (fetch spec: Origin goes on cross-origin requests and on every method except GET and HEAD), so the status check, which is
+  // a GET, has none. 0.4.0 and 0.4.1 refused it with 403 origin (found in a real browser). For that one case only the browser's own word counts, which a page script cannot set:
+  // Sec-Fetch-Site: same-origin, or where that header is not sent, a Referer from this same origin. The host the request went to must also be an allowed origin.
+  // A POST must still carry an allowed Origin (a browser always sends one on POST), and a wrong Origin is refused whatever else the request says.
+  const sameOriginGet = (req) => {
+    const here = new URL(req.url).origin; if (!origins.has(here)) return false;
+    const sfs = req.headers.get('sec-fetch-site'); if (sfs) return sfs === 'same-origin';
+    try { const r = new URL(req.headers.get('referer') || ''); return r.protocol === 'https:' && r.origin === here; } catch { return false; } // not a blob: address, whose origin is the one inside it
+  };
   const person = async (req) => { // who is asking: from the product server, never from the page
     const s = await product.session(req);
     if (!s || typeof s.sess !== 'string' || !roles.has(s.role)) return null;
@@ -55,7 +71,7 @@ export function createInstance({ config, strings, secrets, product, core, now = 
       }
       const rt = ROUTES.find(([rm, re]) => rm === m && re.test(path)), ai = m === 'POST' && path === '/mpc/ai-link';
       if (!rt && !ai) return err(404, 'not_found', 'Not found.');
-      const o = req.headers.get('origin'); if (!o || !origins.has(o)) return err(403, 'origin', 'This origin is not allowed.'); // other origin, or none: refused before anything else
+      const o = req.headers.get('origin'); if (o ? !origins.has(o) : !(m === 'GET' && sameOriginGet(req))) return err(403, 'origin', 'This origin is not allowed.'); // other origin, or none: refused before anything else (a same-origin GET is the one case a browser sends no Origin)
       const who = await person(req); if (!who) return err(403, 'role', 'Only an organizer or a co-organizer can do this.');
       if (rt) {
         const bytes = m === 'GET' ? null : new Uint8Array(await req.arrayBuffer());
@@ -67,7 +83,7 @@ export function createInstance({ config, strings, secrets, product, core, now = 
           if (!b || typeof b !== 'object' || Array.isArray(b)) return err(400, 'bad_request', 'Something in the request is wrong. Check the fields.');
           out = new TextEncoder().encode(JSON.stringify({ ...b, role: config.role_map?.[who.role] || who.role }));
         }
-        const r = await toCore(m, corePath, req, out, who);
+        const r = await toCore(m, corePath, req, out, who, m === 'GET' ? statusToken(req) : {}); // the only GET route reads a ticket: it needs the token
         return new Response(r.status === 204 ? null : await r.arrayBuffer(), { status: r.status, headers: { 'content-type': r.headers.get('content-type') || 'application/json', 'cache-control': 'no-store', ...(r.headers.get('retry-after') ? { 'retry-after': r.headers.get('retry-after') } : {}) } });
       }
       // POST /mpc/ai-link {kind, ticket?, screen?}: the product mints the key; the core keeps only its hash; this server adds k.
@@ -75,13 +91,13 @@ export function createInstance({ config, strings, secrets, product, core, now = 
       if (!b || !Object.hasOwn(AI_KINDS, b.kind)) return err(400, 'bad_request', 'Something in the request is wrong. Check the fields.'); // unknown kind: refused, no default scopes
       if (b.ticket !== undefined && b.ticket !== null) { // a named ticket must be this person's own: the core checks the status token of that ticket for this instance, before any key is minted
         if (typeof b.ticket !== 'string' || !/^T-\d{4,}$/.test(b.ticket)) return err(400, 'bad_request', 'Something in the request is wrong. Check the fields.');
-        const own = await toCore('GET', '/v1/tickets/' + b.ticket, req, null, who);
+        const own = await toCore('GET', '/v1/tickets/' + b.ticket, req, null, who, statusToken(req));
         if (own.status !== 200) return err(403, 'not_yours', 'This ticket is not available.');
       }
       const k = await product.mintKey({ session: who.user_id || who.sess, scopes: AI_KINDS[b.kind], ttl_s: AI_TTL_S });
       if (k.status !== 201) return err(503, 'try_later', 'Please try again in a moment.');
       const body = new TextEncoder().encode(JSON.stringify({ scopes: k.body.scopes, ttl_s: AI_TTL_S, key_hash: k.body.key_hash, product_key_id: k.body.product_key_id, ...(typeof b.ticket === 'string' ? { ticket: b.ticket } : {}), ...(typeof b.screen === 'string' ? { screen: b.screen } : {}) }));
-      const r = await toCore('POST', '/v1/ai-links', req, body, who, { 'content-type': 'application/json', 'idempotency-key': req.headers.get('idempotency-key') || HEX(16) });
+      const r = await toCore('POST', '/v1/ai-links', req, body, who, { 'content-type': 'application/json', 'idempotency-key': req.headers.get('idempotency-key') || HEX(16), ...(typeof b.ticket === 'string' ? statusToken(req) : {}) }); // the core checks the token again when it makes the link
       const j = await r.json().catch(() => ({}));
       if (r.status !== 201) return reply(r.status, { error: j.error || 'try_later', message: j.message });
       return reply(201, { url: j.link + k.body.key }); // the key reaches only this person's page, never the core

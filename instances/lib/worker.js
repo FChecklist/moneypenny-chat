@@ -14,7 +14,7 @@ export function widgetReply(js) { // same origin only: no CORS header is added, 
 }
 const down = () => new Response(JSON.stringify({ error: 'try_later', message: 'Please try again in a moment.' }), { status: 503, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
-export function makeWorker({ config, strings, widgetJs }) {
+export function makeWorker({ config, strings, widgetJs, now }) { // now: an optional clock (tests move time with it); default is the real clock
   checkConfig(config, strings); // a bad record stops the deploy, not the first visitor
   if (typeof widgetJs !== 'string' || !widgetJs.length) throw new Error('widget bundle is empty: run scripts/build-widget.mjs');
   const [signName] = secretNames(config.id).sign, [assertName] = secretNames(config.id).assert;
@@ -28,7 +28,7 @@ export function makeWorker({ config, strings, widgetJs }) {
       const sign = env[signName], assert = env[assertName];
       if (typeof sign !== 'string' || typeof assert !== 'string' || !env.CORE || !env.PRODUCT) return down(); // setup is not complete
       if (!cached || cachedKey !== sign + '|' + assert) { // rebuilt if a secret is rotated
-        cached = createInstance({ config, strings, secrets: { sign, assert }, product: httpAdapter({ productFetch: (r) => env.PRODUCT.fetch(r) }), core: { fetch: (r) => env.CORE.fetch(r) } }); cachedKey = sign + '|' + assert;
+        cached = createInstance({ config, strings, secrets: { sign, assert }, product: httpAdapter({ productFetch: (r) => env.PRODUCT.fetch(r) }), core: { fetch: (r) => env.CORE.fetch(r) }, ...(now ? { now } : {}) }); cachedKey = sign + '|' + assert;
       }
       try { return await cached(req); } catch { return down(); }
     },

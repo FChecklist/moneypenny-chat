@@ -1,8 +1,8 @@
 // C7 (S-051 to S-059). A small fake DOM is used: no browser ran. See docs/DECISIONS.md.
 import { test, expect } from 'bun:test';
-import { readFileSync, readdirSync } from 'node:fs';
 import { view, step, initial, ticketBody, LIMITS } from '../widget/model.js';
 import { makeApi } from '../widget/api.js';
+import { boot } from '../widget/boot.js';
 import { mountWidget } from '../widget/widget.js';
 import { CSS } from '../widget/widget.css.js';
 import { STANDARD_AI_LINE, NOTICE, PRIVACY } from '../src/strings.js';
@@ -39,9 +39,22 @@ test('S-051 the widget draws in a shadow root with its own style; the page gets 
   expect(CSS).toContain(':host{all:initial'); expect(CSS).toContain('--mpc-primary'); expect(CSS).toContain('min-height:44px');
   expect(w.root.all('button')[0].attrs['aria-expanded']).toBe('false');
 });
-test('S-051 no cookies and no storage: the widget code does not touch them', () => {
-  for (const f of readdirSync(new URL('../widget', import.meta.url), { recursive: true }).filter((x) => x.endsWith('.js'))) { const t = readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8'); expect(t).not.toMatch(/document\.cookie|localStorage|sessionStorage|indexedDB/); }
-  expect(readFileSync(new URL('../widget/api.js', import.meta.url), 'utf8')).toContain("credentials: 'same-origin'");
+// 0.4.2: the 0.4.0 test read the widget SOURCE with a regex for cookie and storage words. That says nothing about what the code does. This one USES the widget through a whole visit
+// (open, idea, send, problem, status, copy link) while every cookie, storage and cache door throws if it is touched. The real-browser test (tests/browser) checks the same in Chromium.
+test('S-051 no cookies and no storage: a whole visit with every cookie and storage door throwing', async () => {
+  const doors = ['localStorage', 'sessionStorage', 'indexedDB', 'caches', 'cookieStore'], saved = doors.map((d) => Object.getOwnPropertyDescriptor(globalThis, d));
+  for (const d of doors) Object.defineProperty(globalThis, d, { configurable: true, get() { throw new Error('widget touched ' + d); } });
+  const inits = [];
+  try {
+    const doc = fakeDoc(); Object.defineProperty(doc, 'cookie', { get() { throw new Error('widget read document.cookie'); }, set() { throw new Error('widget set document.cookie'); } });
+    const fetchFn = async (u, init) => { inits.push([u, init]); return init.method === 'POST' ? new Response(JSON.stringify({ ticket: 'T-0005', status_token: 'tok-5' }), { status: 201 }) : new Response(JSON.stringify({ ticket: 'T-0005', status: 'new', team_note: '' }), { status: 200 }); };
+    const w = mountWidget({ ...cfg(), doc, api: makeApi({ fetchFn, sleep: async () => {} }), aiLink: async () => 'https://p.example/ai/1?k=x', clipboard: { writeText: async () => {} } }); w.open();
+    for (const id of ['go:suggest', 'type:option']) w.act(id); w.panel.all('textarea')[0].value = 'a long enough idea'; w.panel.all('textarea')[0].oninput(); await w.act('send');
+    for (const id of ['home', 'go:stuck', 'where:here', 'stuck:s1', 'next']) w.act(id); await w.act('send'); await w.act('status'); w.act('home'); w.act('go:help'); w.act('topic:a-topic'); w.close();
+    expect(w.state().screen).toBe('help.answer'); expect(inits.length).toBe(3); // 2 sends and 1 status call
+  } finally { doors.forEach((d, i) => (saved[i] ? Object.defineProperty(globalThis, d, saved[i]) : delete globalThis[d])); }
+  for (const [, init] of inits) { expect(init.credentials).toBe('same-origin'); expect(init.cache).toBe('no-store'); } // the product's own session cookie goes with the call; the widget adds none
+  expect(inits.every(([u]) => u.startsWith('/mpc/v1/'))).toBe(true); // and only to this instance's own path
 });
 test('S-052 home has exactly 3 buttons in the owner order', () => {
   const v = walk(); expect(v.controls.filter((c) => c.kind === 'button').length).toBe(3);
@@ -102,7 +115,7 @@ test('S-056 notice line with a Terms link on 2.2 and 3.5; no checkbox anywhere; 
   const m = mount(); m.w.open(); m.w.act('go:suggest'); m.w.act('type:option');
   const a = m.w.panel.all('a'); expect(a.length).toBe(1); expect(a[0].attrs.rel || a[0].rel).toBeTruthy(); expect(a[0].href).toBe('https://p.example/terms'); expect(m.texts()).toContain(NOTICE);
   expect(m.w.panel.all().filter((e) => e.tag === 'input' && e.type === 'checkbox').length).toBe(0);
-  for (const f of readdirSync(new URL('../widget', import.meta.url), { recursive: true }).filter((x) => x.endsWith('.js'))) expect(readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, '$1')).not.toMatch(/checkbox|type\s*=\s*['"]?radio/i);
+  // (0.4.0 stripped comments from the source and searched it for "checkbox"; the real DOM of every screen is scanned in tests/browser/widget.browser.mjs instead)
   expect(view(s2, cfg()).controls.find((c) => c.kind === 'privacy').text).toBe(PRIVACY);
 });
 test('S-057 the standard AI line is exact on 1.2, 2.4 and 3.6, each with Copy link; not on home', () => {
@@ -177,5 +190,40 @@ test('round 6 widget output has no tick box: no aria-checked, no aria-pressed an
   scan(); for (const id of ['go:help', 'back', 'go:suggest', 'type:option', 'back', 'go:stuck', 'where:here', 'stuck:s1', 'next']) { try { m.w.act(id); } catch {} scan(); }
   expect(seen.length).toBeGreaterThan(10);
   for (const n of seen) { expect(n.tag).not.toBe('input'); expect(n.attrs?.['aria-checked']).toBeUndefined(); expect(n.attrs?.['aria-pressed']).toBeUndefined(); }
-  for (const src of [readFileSync(new URL('../widget/widget.js', import.meta.url), 'utf8'), readFileSync(new URL('../widget/model.js', import.meta.url), 'utf8')]) expect(src).not.toMatch(/aria-checked|aria-pressed|createElement\(['"]input['"]|<input/i);
+});
+
+// ---- 0.4.2: found by the real-browser tests (tests/browser). The fake fetch above hid both of these.
+import { parseKey } from '../src/idem.js';
+test('0.4.2 the idempotency key the widget makes is a UUID the core accepts (32 plain hex characters were refused with bad_request on every send)', async () => {
+  const keys = []; const fetchFn = async (u, init) => { keys.push(init.headers['idempotency-key']); return new Response(JSON.stringify({ ticket: 'T-0001', status_token: 't' }), { status: 201 }); };
+  const api = makeApi({ fetchFn, sleep: async () => {} }); await api.send('/v1/tickets', { n: 1 }); await api.send('/v1/tickets', { n: 2 });
+  expect(keys.length).toBe(2); expect(keys[0]).not.toBe(keys[1]);
+  for (const k of keys) { expect(k).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/); expect(parseKey(k)).toBe(k); }
+  const real = crypto.randomUUID; crypto.randomUUID = undefined; // an old browser or a page that is not secure: the hand-made version 4 id is still a UUID
+  try { const fk = []; const a2 = makeApi({ fetchFn: async (u, init) => { fk.push(init.headers['idempotency-key']); return new Response('{}', { status: 201 }); }, sleep: async () => {} }); await a2.send('/v1/tickets', { n: 3 }); expect(parseKey(fk[0])).toBe(fk[0]); } finally { crypto.randomUUID = real; }
+});
+test('0.4.2 Copy link gives the instance call the status token of the ticket this page sent (the only proof it is the person\'s own); before a send there is no ticket and no token', async () => {
+  const asked = [];
+  const fetchFn = async (u, init) => new Response(JSON.stringify({ ticket: 'T-0009', status_token: 'tok-77' }), { status: 201 });
+  const m = mount({ api: makeApi({ fetchFn, sleep: async () => {} }), aiLink: async (k, o) => { asked.push([k, o]); return 'https://p.example/ai/1?k=x'; }, clipboard: { writeText: async () => {} } }); m.w.open();
+  m.w.act('go:help'); m.w.act('topic:a-topic'); await m.buttons().find((b) => b.textContent === 'Copy link').click(); await new Promise((r) => setTimeout(r, 5));
+  expect(asked[0][0]).toBe('help'); expect(asked[0][1].ticket).toBeFalsy(); expect(asked[0][1].token).toBeFalsy(); // a help answer: nothing sent yet, a link for the screen only
+  for (const id of ['home', 'go:stuck', 'where:here', 'stuck:s1', 'next']) m.w.act(id); await m.w.act('send');
+  await m.buttons().find((b) => b.textContent === 'Copy link').click(); await new Promise((r) => setTimeout(r, 5));
+  expect(asked[1][0]).toBe('stuck'); expect(asked[1][1]).toEqual({ ticket: 'T-0009', topic: 's1', token: 'tok-77' });
+  expect(makeApi({ fetchFn }).token()).toBeNull(); // a fresh page has no token
+});
+// 0.4.3 (review of 0.4.2): boot.js made the AI link key with a bare crypto.randomUUID(), which is missing in an old browser and on a page that is not https. Copy link then failed
+// there, although the ticket send (api.js) already had a fallback. boot.js now uses the same helper. This runs the real boot() with the real widget and no randomUUID.
+test('0.4.3 Copy link still works when crypto.randomUUID is not available: the link call sends a valid UUID key and the link is copied', async () => {
+  const realFetch = globalThis.fetch, real = crypto.randomUUID, sent = [], copied = [];
+  globalThis.fetch = async (u, init) => { sent.push({ u, key: init.headers['idempotency-key'], token: init.headers['x-mpc-status-token'] }); return new Response(JSON.stringify({ url: 'https://p.example/ai/9?k=abc' }), { status: 201 }); };
+  crypto.randomUUID = undefined;
+  try {
+    let w; boot({ strings, routes: {} }, { doc: fakeDoc(), loc: { pathname: '/play' }, mount: (c) => (w = mountWidget({ ...c, clipboard: { writeText: async (t) => void copied.push(t) } })) });
+    w.open(); w.act('go:help'); w.act('topic:a-topic');
+    await w.panel.all('button').find((b) => b.textContent === 'Copy link').click(); await new Promise((r) => setTimeout(r, 5));
+    expect(copied).toEqual(['https://p.example/ai/9?k=abc']); expect(w.panel.all().map((e) => e.textContent).join('\n')).not.toContain('Could not copy');
+    expect(sent.length).toBe(1); expect(sent[0].u).toBe('/mpc/ai-link'); expect(sent[0].key).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/); expect(parseKey(sent[0].key)).toBe(sent[0].key);
+  } finally { globalThis.fetch = realFetch; crypto.randomUUID = real; }
 });

@@ -2,7 +2,7 @@
 //   peekIdem(instance, keyHash, now) -> {bodyHash, response} | null;  putIdem(instance, keyHash, bodyHash, response, now)
 //   createTicket(instance, idem:{keyHash, bodyHash}, build(number) -> {row, response}, now) -> {status:'created'|'replay', response} | {status:'conflict'}
 //   getTicket(instance, number, now) -> row | null (null once erase_at has passed);  listTickets({instance?, status?, cursor?, limit, now});  updateTicket(instance, number, patch, now)
-// C4 screenshots: putShot, getShot, claimShot, attachShot, releaseShot, setShotErase, shotsOfTicket, dueShots, dropShots
+// C4 screenshots: putShot (row has sess_hash, the uploader), getShot, claimShot(instance, id, sessHash, now), attachShot, releaseShot, setShotErase, shotsOfTicket, dueShots, dropShots
 // C4 erase and audit: dueTickets, eraseTicket, expireIdem, erasureLog, audit, listAudit
 // C5 mail queue: queueMail, dueMail, bumpMail, dropMail
 // C6 AI links: createLink, getLink, getLinkByHash, updateLink, addNote, listNotes, addCall, listCalls
@@ -40,8 +40,9 @@ export function memoryStore() {
     // C4
     async putShot(row) { shots.push({ ...row }); },
     async getShot(instance, id, now) { const s = shot(instance, id); return s && s.erase_at > now ? { ...s } : null; },
-    async claimShot(instance, id, now) { const s = shot(instance, id); if (!s || s.ticket !== null || s.erase_at <= now) return false; s.ticket = 'claim'; return true; },
-    async attachShot(instance, id, number, eraseAt) { const s = shot(instance, id); if (s) { s.ticket = number; s.erase_at = eraseAt; } },
+    // Keyed by instance AND session: sessHash must equal the hash stored when the file was uploaded (a file with no owner can never be claimed).
+    async claimShot(instance, id, sessHash, now) { const s = shot(instance, id); if (!s || typeof sessHash !== 'string' || !sessHash || s.sess_hash !== sessHash || s.ticket !== null || s.erase_at <= now) return false; s.ticket = 'claim'; return true; },
+    async attachShot(instance, id, number, eraseAt) { const s = shot(instance, id); if (s) { s.ticket = number; s.erase_at = eraseAt; s.sess_hash = null; } }, // the owner hash was only needed to claim: it is dropped once the file is on a ticket
     async releaseShot(instance, id) { const s = shot(instance, id); if (s && s.ticket === 'claim') s.ticket = null; },
     async setShotErase(instance, number, eraseAt) { for (const s of shots) if (s.instance === instance && s.ticket === number) s.erase_at = eraseAt; },
     async shotsOfTicket(instance, number) { return shots.filter((s) => s.instance === instance && s.ticket === number).map((s) => ({ ...s })); },
@@ -56,8 +57,9 @@ export function memoryStore() {
       mailq = mailq.filter((m) => !(m.instance === instance && m.number === number));
       erasure.push({ ticket: number, instance, erased_at: now }); return true;
     },
+    // Every link whose time is up goes, with its notes and call log: a link made for a ticket as well as one made without (privacy rule: 24 hours at most).
     async eraseExpiredLinks(now) {
-      const ids = links.filter((l) => l.ticket == null && l.expires <= now).map((l) => l.id);
+      const ids = links.filter((l) => l.expires <= now).map((l) => l.id);
       links = links.filter((l) => !ids.includes(l.id)); notes = notes.filter((n) => !ids.includes(n.link_id)); calls = calls.filter((c) => !ids.includes(c.link_id)); return ids.length;
     },
     async expireIdem(now) { for (const [k, v] of idem) if (v.expires <= now) idem.delete(k); },

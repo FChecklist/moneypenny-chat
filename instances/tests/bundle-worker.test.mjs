@@ -22,7 +22,7 @@ test('C10 one built file per instance; it holds that instance only; no secret na
     const js = bundles[id], other = IDS.find((x) => x !== id);
     expect(js.length).toBeGreaterThan(2000); expect(js).toContain('"' + id + '"'); expect(js).not.toContain(other === 'veridian-aios' ? 'veridian-aios.com' : '"' + other + '"');
     expect(js).not.toMatch(/SECRET_|key_hash|assert|import\s*\(|^import /m); expect(js).toContain('/mpc/ai-link'); expect(js).toContain(rd(id, 'strings.json').help_topics[0].label);
-    expect(js).not.toMatch(/document\.cookie|localStorage|sessionStorage/);
+    // cookies and storage: not a word search on the file; a real Chromium visit checks them (tests/browser/widget.browser.mjs)
   }
 });
 test('C10 the build refuses an unknown instance', async () => { await expect(buildWidget('nope')).rejects.toThrow('unknown instance'); await expect(buildWidget('lib')).rejects.toThrow('unknown instance'); });
@@ -131,4 +131,16 @@ test('C10 each instance worker.js entry loads with the built file next to it and
     const w = (await import(`../${id}/worker.js`)).default, r = await w.fetch(new Request('https://x.test/mpc/widget.js'), {});
     expect(r.status).toBe(200); expect(await r.text()).toBe(bundles[id]); expect(typeof w.fetch).toBe('function');
   }
+});
+
+test('0.4.2 boot: the link call sends the status token as a header, only when a ticket is named, and never in the body', async () => {
+  const { boot } = await import('../../core/widget/boot.js'); const got = [], calls = [];
+  const inst = { strings: rd('corporatetambola', 'strings.json'), routes: {} };
+  globalThis.fetch = async (u, init) => { calls.push({ headers: init.headers, body: JSON.parse(init.body) }); return new Response(JSON.stringify({ url: 'https://core.test/ai/x?k=y' }), { status: 201 }); };
+  boot(inst, { doc: {}, loc: { pathname: '/console' }, mount: (c) => { got.push(c); return {}; } });
+  await got[0].aiLink('stuck', { ticket: 'T-0001', token: 'tok-secret-1' }); await got[0].aiLink('help', { token: 'tok-stray' }); await got[0].aiLink('help');
+  expect(calls[0].headers['x-mpc-status-token']).toBe('tok-secret-1'); expect(calls[0].body).toEqual({ kind: 'stuck', ticket: 'T-0001', screen: '/console' });
+  expect(calls[1].headers['x-mpc-status-token']).toBeUndefined(); expect(calls[1].body).toEqual({ kind: 'help', screen: '/console' }); // no ticket named: a stray token is not sent
+  expect(calls[2].headers['x-mpc-status-token']).toBeUndefined();
+  for (const c of calls) expect(JSON.stringify(c.body)).not.toContain('tok-'); expect(calls.every((c) => /^[0-9a-f-]{36}$/.test(c.headers['idempotency-key']))).toBe(true);
 });

@@ -1,12 +1,14 @@
 {
   "name": "moneypenny-chat",
-  "version": "0.4.1",
+  "version": "0.4.6",
   "private": true,
   "type": "module",
   "description": "Moneypenny Chat: Need help, Suggest an option or feature, Stuck: tell where.",
   "scripts": {
     "scan": "bun scripts/secrets-scan.mjs",
     "test": "bun scripts/secrets-scan.mjs && bun test",
-    "test:core": "cd core && bun test"
+    "test:core": "cd core && bun test",
+    "test:browser": "bun scripts/build-widget.mjs && bun test --timeout 120000 ./tests/browser/widget.browser.mjs ./tests/browser/masking.browser.mjs",
+    "test:all": "bun run test && bun run test:browser"
   }
 }

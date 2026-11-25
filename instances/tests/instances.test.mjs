@@ -142,7 +142,10 @@ test('co-organizer: the product role "host" is stored as co-organizer; DNT reach
   const r = rig('corporatetambola'), res = await r.post('/mpc/v1/tickets', TICKET, { tok: 'host-1', headers: { dnt: '1' } }); expect(res.status).toBe(201);
   expect((await r.env.store.getTicket('corporatetambola', (await res.json()).ticket, Date.now())).role).toBe('co-organizer');
 });
-test('the proxy sets and reads no cookies; the standard line is imported, not copied; version notes exist', () => {
-  const src = readFileSync(new URL('../lib/proxy.js', import.meta.url), 'utf8'); expect(src).not.toMatch(/set-cookie|req\.headers\.get\('cookie'\)|document\.cookie/i);
-  expect(src).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.4.1'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.4.1');
+test('the proxy sets no cookie on any answer (ticket, refusal, error, link, config); the standard line is imported, not copied; version notes exist', async () => {
+  const r = rig('corporatetambola'), seen = [];
+  seen.push(await r.post('/mpc/v1/tickets', TICKET), await r.post('/mpc/v1/tickets', 'not json'), await r.post('/mpc/v1/tickets', TICKET, { tok: 'player-1' }), await r.post('/mpc/v1/tickets', TICKET, { origin: 'https://evil.example' }),
+    await r.post('/mpc/ai-link', { kind: 'help' }), await r.post('/mpc/ai-link', { kind: 'nope' }), await r.handle(new Request('https://i.test/mpc/config.json')), await r.handle(new Request('https://i.test/mpc/other')));
+  expect(seen.map((x) => x.status)).toEqual([201, 400, 403, 403, 201, 400, 200, 404]); for (const x of seen) expect(x.headers.get('set-cookie')).toBeNull();
+  expect(readFileSync(new URL('../lib/proxy.js', import.meta.url), 'utf8')).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.4.6'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.4.4');
 });
