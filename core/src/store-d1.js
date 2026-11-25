@@ -60,7 +60,7 @@ export function d1Store(db) {
     async getShot(instance, id, now) { return (await db.prepare('SELECT * FROM shot WHERE instance=? AND id=? AND erase_at>?').bind(instance, id, now).first()) || null; },
     // Keyed by instance AND session. A row with no sess_hash (NULL) never equals a hash, so an old row can never be claimed.
     async claimShot(instance, id, sessHash, now) { if (typeof sessHash !== 'string' || !sessHash) return false; return (await db.prepare("UPDATE shot SET ticket='claim' WHERE instance=? AND id=? AND sess_hash=? AND ticket IS NULL AND erase_at>?").bind(instance, id, sessHash, now).run()).meta.changes > 0; },
-    async attachShot(instance, id, number, eraseAt) { await db.prepare('UPDATE shot SET ticket=?, erase_at=? WHERE instance=? AND id=?').bind(number, eraseAt, instance, id).run(); },
+    async attachShot(instance, id, number, eraseAt) { await db.prepare('UPDATE shot SET ticket=?, erase_at=?, sess_hash=NULL WHERE instance=? AND id=?').bind(number, eraseAt, instance, id).run(); }, // the owner hash was only needed to claim: it is dropped once the file is on a ticket
     async releaseShot(instance, id) { await db.prepare("UPDATE shot SET ticket=NULL WHERE instance=? AND id=? AND ticket='claim'").bind(instance, id).run(); },
     async setShotErase(instance, number, eraseAt) { await db.prepare('UPDATE shot SET erase_at=? WHERE instance=? AND ticket=?').bind(eraseAt, instance, number).run(); },
     async shotsOfTicket(instance, number) { return (await db.prepare('SELECT * FROM shot WHERE instance=? AND ticket=?').bind(instance, number).all()).results; },

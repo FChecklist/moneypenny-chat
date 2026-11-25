@@ -42,7 +42,7 @@ export function memoryStore() {
     async getShot(instance, id, now) { const s = shot(instance, id); return s && s.erase_at > now ? { ...s } : null; },
     // Keyed by instance AND session: sessHash must equal the hash stored when the file was uploaded (a file with no owner can never be claimed).
     async claimShot(instance, id, sessHash, now) { const s = shot(instance, id); if (!s || typeof sessHash !== 'string' || !sessHash || s.sess_hash !== sessHash || s.ticket !== null || s.erase_at <= now) return false; s.ticket = 'claim'; return true; },
-    async attachShot(instance, id, number, eraseAt) { const s = shot(instance, id); if (s) { s.ticket = number; s.erase_at = eraseAt; } },
+    async attachShot(instance, id, number, eraseAt) { const s = shot(instance, id); if (s) { s.ticket = number; s.erase_at = eraseAt; s.sess_hash = null; } }, // the owner hash was only needed to claim: it is dropped once the file is on a ticket
     async releaseShot(instance, id) { const s = shot(instance, id); if (s && s.ticket === 'claim') s.ticket = null; },
     async setShotErase(instance, number, eraseAt) { for (const s of shots) if (s.instance === instance && s.ticket === number) s.erase_at = eraseAt; },
     async shotsOfTicket(instance, number) { return shots.filter((s) => s.instance === instance && s.ticket === number).map((s) => ({ ...s })); },

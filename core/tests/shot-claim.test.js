@@ -46,6 +46,7 @@ for (const store of Object.keys(STORES)) {
     const e = E(), id = await up(e, A), row = await e.store.getShot('example-product', id, Date.now());
     expect(JSON.stringify(row)).not.toContain(A.sess); expect(row.sess_hash).toMatch(/^[0-9a-f]{64}$/);
     const t = await (await send(e, id, A)).json(); expect(t.ticket).toBe('T-0001');
+    expect((await e.store.shotsOfTicket('example-product', 'T-0001'))[0].sess_hash ?? null).toBeNull(); // used for the claim only: once the file is on a ticket the hash is dropped
     await e.store.eraseTicket('example-product', 'T-0001', Date.now()); expect(await e.store.getShot('example-product', id, 0)).toBeNull();
   });
   test(`[${store}] an upload needs a session: a call that has no role proof is refused before anything is stored`, async () => {
