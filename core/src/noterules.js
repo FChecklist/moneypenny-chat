@@ -5,7 +5,7 @@
 // Natural reports are sometimes refused too ("A person must pay" is refused). That cost is accepted and listed in docs/DECISIONS.md. Tests: core/tests/note-words.test.js.
 
 const stems = (s) => s.split(' ');
-const VERBS = stems('pay charge purchase buy delete erase remove wipe purge destroy refund reimburse cancel transfer');   // the money and removal verbs
+const VERBS = stems('pay charge purchase buy delete erase remove wipe purge destroy refund reimburse cancel transfer discard trash unsubscribe refill recharge donate fund');   // the money and removal verbs (0.4.5: the last seven added after a review named them)
 const NOUNS = stems('payment payout credit password passcode cancellation');                                              // their nouns (the payment provider is matched as razor*)
 const STRONG = stems('please kindly let ahead click press tap hit select choose confirm approve accept');                 // push words
 const ASK = stems('complete make process submit authorize authorise release settle send give add top topup spend wire deposit move grant award issue allocate assign enter type paste share reveal provide supply tell use finish initiate start proceed apply redeem set email text reply ask');
@@ -24,6 +24,9 @@ export function checkNoteText(type, text) {
   if (typeof text !== 'string') return null;
   if (type !== 'plan' && type !== 'step' && type !== 'done' && type !== 'blocked') return null;
   const t = clean(text);
+  // 0.4.5: a note is plain English. A letter of any other script (Cyrillic, Greek, Devanagari and so on) is refused, because some Cyrillic letters look exactly like Latin "p", "a" and "y" and NFKC
+  // does not fold them, so a note spelled with them would have no listed word to find. The cost: a note that quotes a page label in another script is refused too; the AI can say what it saw in plain words.
+  if (/[^\p{Script=Latin}\p{Script=Common}\p{Script=Inherited}]/u.test(t)) return 'forbidden_action';
   // The text is read twice: with a hyphen as a space ("top-up" -> top, up) and with it removed ("e-mail" -> email, "de-lete" -> delete).
   for (const w of [wordsOf(t), wordsOf(t.replace(/-/g, ''))]) for (let i = 0; i < w.length; i++) {
     if (w[i].startsWith('razor')) return 'forbidden_action';

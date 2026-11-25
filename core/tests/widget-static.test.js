@@ -16,6 +16,15 @@ export function scan(src) {
   if (/\bdocument\s*\.\s*cookie\b/.test(c)) out.push('document.cookie');
   if (/\blocalStorage\b/.test(c)) out.push('localStorage');
   if (/\bsessionStorage\b/.test(c)) out.push('sessionStorage');
+  // 0.4.5 (review of 0.4.4): the other ways a page script can keep something or call a third party, and a storage name built from two pieces. Still a text scan:
+  // the browser tests stay the real check.
+  if (/\bindexedDB\b/.test(c)) out.push('indexedDB');
+  if (/\bsendBeacon\b/.test(c)) out.push('sendBeacon');
+  if (/\bXMLHttpRequest\b/.test(c)) out.push('XMLHttpRequest');
+  if (/\bWebSocket\b/.test(c)) out.push('WebSocket');
+  if (/\bEventSource\b/.test(c)) out.push('EventSource');
+  if (/\bcaches\s*\.\s*(?:open|put|match)\b/.test(c)) out.push('cache storage');
+  if (/\[\s*['"`][^'"`]*['"`]\s*\+\s*['"`](?:Storage|cookie)['"`]/i.test(c)) out.push('a storage name built from pieces');
   for (const m of c.matchAll(/\bfetch\s*\(\s*([^)]*)/g)) { // the first argument: a path on this site is fine; a variable or the spread of arguments is fine (the address was set elsewhere, and any literal address there is caught below)
     const a = m[1].trim();
     if (/^['"`]/.test(a) && !/^['"`]\/(?!\/)/.test(a)) out.push('fetch to ' + a.slice(0, 40)); // a quoted address that does not start with a single "/"
@@ -29,6 +38,13 @@ test('the scan itself works: it flags each forbidden thing and lets a same-site 
   expect(scan("document . cookie = 'a=b'")).toEqual(['document.cookie']);
   expect(scan("localStorage.setItem('a', 1)")).toEqual(['localStorage']);
   expect(scan("window.sessionStorage.getItem('a')")).toEqual(['sessionStorage']);
+  expect(scan("indexedDB.open('x')")).toEqual(['indexedDB']);
+  expect(scan("navigator.sendBeacon('/x', data)")).toEqual(['sendBeacon']);
+  expect(scan('const r = new XMLHttpRequest();')).toEqual(['XMLHttpRequest']);
+  expect(scan("new WebSocket('wss://x.example')").length).toBeGreaterThan(0);
+  expect(scan("new EventSource('/events')")).toEqual(['EventSource']);
+  expect(scan("caches.open('v1')")).toEqual(['cache storage']);
+  expect(scan("window['local' + 'Storage'].setItem('a', 1)")).toEqual(['a storage name built from pieces']);
   expect(scan("fetch('https://tracker.example/hit')").length).toBeGreaterThan(0);
   expect(scan("fetch('//tracker.example/hit')").length).toBeGreaterThan(0);
   expect(scan('fetch(`https://tracker.example/${id}`)').length).toBeGreaterThan(0);

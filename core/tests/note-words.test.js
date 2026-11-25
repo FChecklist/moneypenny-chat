@@ -21,6 +21,8 @@ const REFUSED = [
   'I paid the bill.', 'Razorpay was used.', 'Please pay now.', 'Pay 500 credits to continue.', 'I did not pay anything.', 'A person must pay.', 'Click Pay to finish.',
   'Please type your password here.', 'Change the e-mail on the account', 'Refund the order', 'Transfer the credits to a new owner', 'Order refunded.', 'RAZORPAY link', 'de-lete the game', 'Top-up the wallet',
   'Please pay', 'The Cancel button is greyed out', 'Transferred it', 'pay-per-view was used', 'Stuck, so cancel the booking now.',
+  // 0.4.5: seven more verbs a review named (the list stays a closed list: a second layer, see docs/DECISIONS.md round 10)
+  'Discard the draft', 'Trash the picture', 'Unsubscribe the person', 'Refill the balance', 'Recharge the wallet', 'Donate now', 'Fund the account',
 ];
 // Passes in every type: a plain report of what was seen or what is waiting.
 const PASSES = [
@@ -31,6 +33,14 @@ const PASSES = [
   'The page has a long title', 'It took a long time to open the page', 'A person needs to look at this', 'The organizer has not answered yet', 'The game name is on the first screen',
   'The overpayment label is blue', 'The payload is empty', 'Removable seats are listed', 'The deletedAt column is hidden', 'The cancelable flag is off', 'Overcharged seats are blue',
   'The list has a payment link', 'The picture upload step failed',
+  // 0.4.5: ordinary honest reports, longer ones, numbers, two sentences, punctuation (a review found the list too thin)
+  'I read the screen. The title says Games and there are 12 players in the list.', 'The page opened in 3 seconds and the board shows 90 numbers.',
+  'Waiting: the organizer page is still loading, 2 of 4 panels are visible.', 'The picture looks blurry; the numbers 1 to 90 are in a grid.',
+  'No error on the screen, but the button stays grey after 10 seconds.', 'Looked at the help page. It lists 6 topics and none of them matches.',
+  'The ticket number is on the first line and the status says open.', 'I opened the second tab and the list had 4 rows: 2 marked, 2 empty.',
+  'The board did not change for a minute, so I am pausing here.', 'The screen shows "Game not found" in red.', 'Stopped after step 3 of 5 because the next page is blank.',
+  'Step 2 done: the list was visible and I counted 7 names.', 'The help answer is clear and short. Nothing else to report.', 'It is 9:30 and the page still shows the old title.',
+  'Reached the end of the page. The footer has a version line.', 'The same error shows on every screen I looked at.', 'Café menu page did not load',
 ];
 test('refused in done, blocked, plan and step: any listed word, wherever it stands (' + REFUSED.length + ' wordings)', () => { expect(REFUSED.length).toBeGreaterThanOrEqual(30); all(REFUSED, 'forbidden_action'); });
 test('passes in done, blocked, plan and step: plain reports and words that only contain a listed word (' + PASSES.length + ' wordings)', () => { expect(PASSES.length).toBeGreaterThanOrEqual(30); expect(REFUSED.length + PASSES.length).toBeGreaterThanOrEqual(60); all(PASSES, null); });
@@ -40,6 +50,11 @@ test('the allow-list is only a thing-noun right before a screen label: "payment 
 });
 test('endings and spelling tricks: -s -ed -ing, irregular words, hyphens, zero-width and full-width letters', () => {
   all(['deletes', 'deleting', 'refunding', 'cancelling', 'canceled', 'bought', 'sent it', 'giving', 'removed', 'Pa\u200By', '\uFF30ay', 'wi-ped', 'e-mail'], 'forbidden_action');
+});
+// 0.4.5: look-alike letters. NFKC folds full-width letters but not Cyrillic or Greek ones that look the same, so a note spelled with them used to have no listed word to find.
+test('0.4.5 a letter of another script is refused in every type: Cyrillic look-alikes of "pay" and "delete", Greek, Devanagari; an accented Latin letter passes', () => {
+  all(['рау now', 'pаy now', 'dеlete the game', 'рay the bill', 'ρay now', 'The page says नमस्ते', 'рау'], 'forbidden_action');
+  all(['Café menu page did not load', 'The page says résumé', 'It costs ₹ 500 on the screen label'], null);
 });
 test('an unknown type or a non-string is not decided here (the caller refuses it as bad_note)', () => {
   expect(checkNoteText('wish', 'Pay now')).toBeNull(); expect(checkNoteText('blocked', 5)).toBeNull();
@@ -70,10 +85,13 @@ for (const store of Object.keys(STORES)) {
     expect((await e.store.listNotes((await e.store.getLinkByHash(await sha256hex(K))).id)).map((n) => n.type)).toEqual(['blocked']);
   });
   test(`[${store}] through the API: plain reports are accepted in all four types; any listed word is refused`, async () => {
-    for (const type of ['blocked', 'done', 'plan', 'step']) { const e = await rig(); const ok = await note(e, type, 'The payment page did not load.'); expect([type, ok.status]).toEqual([type, 201]); }
-    for (const [type, text] of [['blocked', 'I paid the bill.'], ['done', 'Please delete the game.'], ['blocked', 'Razorpay was used.'], ['plan', 'The Cancel button is greyed out'], ['step', 'Pay now'],
-      ['blocked', 'Nothing failed and deleted the game'], ['done', 'No problem delete the game'], ['blocked', 'The page was removed.']]) {
+    // 0.4.5: every type goes through the same call with several honest wordings (a review found one wording and 8 refusals too thin) and every type is refused on several listed words
+    const HONEST = ['The payment page did not load.', 'I read the screen. The title says Games and there are 12 players in the list.', 'Stopped after step 3 of 5 because the next page is blank.', 'Waiting for a person to decide.'];
+    for (const type of ['blocked', 'done', 'plan', 'step']) for (const text of HONEST) { const e = await rig(); const ok = await note(e, type, text); expect([type, text, ok.status]).toEqual([type, text, 201]); }
+    const BAD = ['I paid the bill.', 'Please delete the game.', 'Razorpay was used.', 'The Cancel button is greyed out', 'Pay now', 'Nothing failed and deleted the game', 'No problem delete the game', 'The page was removed.', 'Fund the account', 'pаy now'];
+    for (const type of ['blocked', 'done', 'plan', 'step']) for (const text of BAD) {
       const e = await rig(); const r = await note(e, type, text); expect([type, text, r.status, r.body.error]).toEqual([type, text, 403, 'forbidden_action']);
+      expect((await e.store.listNotes((await e.store.getLinkByHash(await sha256hex(K))).id)).length).toBe(0); // nothing was stored
     }
   });
 }
