@@ -1,7 +1,7 @@
 // S-051: styles live inside the shadow root, so page CSS cannot reach them. The theme is set by CSS variables on the host element.
 export const CSS = `:host{all:initial;--mpc-primary:#1f4e8c;--mpc-on:#fff;--mpc-bg:#fff;--mpc-text:#1a1a1a;font:16px/1.4 system-ui,sans-serif}
 *{box-sizing:border-box}
-.fab,.panel{all:initial;box-sizing:border-box;font:16px/1.4 system-ui,sans-serif} /* page rules reach the host element (div, *) and the shadow tree inherits from it: start both roots from nothing */
+.fab,.panel{all:initial;visibility:inherit;box-sizing:border-box;font:16px/1.4 system-ui,sans-serif} /* page rules reach the host element (div, *) and the shadow tree inherits from it: start both roots from nothing. Visibility is the one thing kept from the host: a picture hides the host, and the widget must go with it */
 .fab{position:fixed;right:16px;bottom:16px;min-height:44px;min-width:44px;padding:0 18px;border:0;border-radius:24px;background:var(--mpc-primary);color:var(--mpc-on);cursor:pointer;z-index:2147483000}
 .panel{position:fixed;right:16px;bottom:72px;width:min(360px,calc(100vw - 32px));max-height:calc(100vh - 96px);overflow:auto;background:var(--mpc-bg);color:var(--mpc-text);border:1px solid #888;border-radius:12px;padding:16px;z-index:2147483000}
 .panel[hidden]{display:none}
