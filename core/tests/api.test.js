@@ -4,9 +4,9 @@ import worker from '../src/index.js';
 
 test('S-014 GET /v1/health and /v1/version', async () => {
   const e = makeEnv({ now: () => 1234 });
-  let r = await e.plain('GET', '/v1/health'); expect(r.status).toBe(200); expect(await r.json()).toEqual({ ok: true, core: '0.4.1', time: 1234 });
-  expect(r.headers.get('x-mpc-core-version')).toBe('0.4.1');
-  r = await e.plain('GET', '/v1/version'); expect(await r.json()).toEqual({ core: '0.4.1', api: 'v1', min_instance: '0.1' });
+  let r = await e.plain('GET', '/v1/health'); expect(r.status).toBe(200); expect(await r.json()).toEqual({ ok: true, core: '0.4.2', time: 1234 });
+  expect(r.headers.get('x-mpc-core-version')).toBe('0.4.2');
+  r = await e.plain('GET', '/v1/version'); expect(await r.json()).toEqual({ core: '0.4.2', api: 'v1', min_instance: '0.1' });
 });
 test('S-014 unknown path, wrong method, and tickets without signature', async () => {
   const e = makeEnv();

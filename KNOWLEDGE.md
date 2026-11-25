@@ -1,10 +1,28 @@
 # Knowledge: what was proven and how
 
-## Not run in a real browser (C7 to C12)
-Everything for the widget, the bundle and the screenshot library was tested with a small fake DOM and plain pixel arrays in `bun test`. No browser, no Cloudflare and no real product ran.
-- **Proven in tests:** screen content, shadow-root structure, the bundle text (built with Bun), the Worker logic as a function, the adapter against a fake product server, masking on fake fields (value blank while the picture is made, restored after, also on error), black pixels under masked boxes and editor boxes, size steps, no storage or cookie calls in the code.
-- **Not proven:** that the built file loads and runs in a browser; that product CSS cannot reach the widget (only structure is checked); contrast, 44 px targets and keyboard walk; that a real DOM-to-canvas engine honours the blanked fields; that `canvas.toBlob` strips EXIF; pointer drag on a real canvas; `wrangler deploy` and routes; the real product session answer; Cloudflare Access.
-- **Spec C8 proof lines say "browser test".** Those are covered here only at pixel and fake-DOM level. Run them in a browser before ship.
+## Proven in Chromium (0.4.2): `bun run test:browser`
+Playwright Chromium loads the BUILT widget file (the file `scripts/build-widget.mjs` writes) on a product page. The real instance Worker, the real core on the real SQL schema (bun:sqlite) and a product double answer. Only the network wire is replaced: Playwright routes the https page origin to those functions, so the browser keeps its own Origin, Referer, cookie, clipboard and secure-context rules. Server time is moved with `rig.travel()` and the same sweep the hourly cron runs is called. See `tests/browser/rig.mjs`.
+- **Loads:** headers of `/mpc/widget.js` (text/javascript, 300 s, no cookie, no CORS header); one shadow-root host and nothing else in the page; no cookie set, no localStorage, sessionStorage, IndexedDB or cache entry; no console error. Every control is 44 px or more; Tab order, Enter, Escape and focus return work; text and buttons have contrast of 4.5 or more. A product style sheet that hides every button, heading and label and shrinks all text does not change the widget.
+- **Consent step:** the notice shows a Terms link (new tab, noopener) when the instance has a Terms page, and no link when it has none (all three instances: none yet). No tick box, radio, aria-checked or "agree" word on any of 13 screens; no Hindi line; every screen passes the owner word rules. Nothing leaves the page before Send.
+- **Standard line:** exact (44 bytes) on the help answer, the sent idea and the sent problem; not on home. Copy link puts a working AI link on the clipboard, with a ticket (status token as a header) and without one; the AI page opens for it.
+- **Session adapter:** the role comes from the product session cookie, not from the page: a page that sends role headers and a role in the body is ignored; a "host" is stored as co-organizer; no cookie, an unknown cookie and an unknown role send nothing; a product fault fails closed after 3 tries with one key, and one tap sends one ticket when the product is back. A page of another site gets no cookie sent and is refused on Origin before the product is asked.
+- **Status token:** a link for a ticket works with the ticket's own token only; no token, a made-up token and another person's token are refused (403) and no key is made; the product server never sees the token. Check status works (a same-origin GET carries no Origin header); a ticket number alone, or a guess, shows nothing.
+- **Expiry and erase:** a minute past the link's hour the AI is told the link has ended (in a real page); the sweep erases both kinds of link (with no ticket, and for a ticket) with their notes and call logs; the ticket goes at 24 hours (games product) and only the erasure log stays.
+- **Screenshot masking** (the real capture library on a real page; the picture engine is the browser's own screenshot, taken while the library has blanked the fields): every masked field box (password, e-mail, card, `data-mpc-hide` block) is one flat black in the picture, while the same box in an unmasked picture is full of text; a plain field stays readable; the widget is not in the picture; if the engine ignores the blank the boxes are still burned black; a real mouse drag adds a hidden part; the PNG and the JPEG from `canvas.toBlob` have no EXIF, stay within 1.5 MB and 1600 px; Discard sends nothing; the page is put back exactly.
+
+## Found only because a browser ran (fixed in 0.4.2)
+- The widget's idempotency key was 32 hex characters, not a UUID: the core refused every send (`bad_request`).
+- The widget never sent the status token on the AI link call: every link for a sent ticket was refused (403 `not_yours`).
+- A same-origin GET carries no Origin header: "Check status" was refused (403 `origin`).
+- Page CSS such as `* { font-size: 3px }` reaches the host element and the widget inherited from it. A first fix (`all: initial`) also made the widget show up in pictures; the browser caught that too (the widget keeps `visibility` from its host now).
+
+## Still not proven
+- `wrangler deploy`, the routes, and the real Cloudflare parts (Durable Object, D1, R2, Cloudflare Access, mail service). A real product session answer. The team page in a browser.
+- Firefox and Safari; phones. A page with a strict Content-Security-Policy (the widget needs `style-src` to allow its own style element).
+- CORS as the browser enforces it: Playwright's routing makes cross-origin calls pass, so only "the instance sends no CORS header and refuses a foreign Origin" is tested, not the browser's block.
+- A DOM-to-pixels engine: none is shipped. The widget shows no screenshot button; masking is proven for the library and a stand-in engine only.
+- Open for the owner (see `docs/DECISIONS.md`, round 7): links made by the widget hold `read_event` and `read_ticket` only, so an AI cannot post notes through them (the note call needs `report`); the AI page address points at the first allowed origin and no route in this repo serves `/ai/` there; "Check status" can be used once per sent screen.
 
 ## Run
-`bun run test` (secrets scan first). The Worker entry test writes `instances/<id>/dist/widget.js` (ignored by git); `bun scripts/build-widget.mjs` writes it too.
+`bun run test` (secrets scan first, then the fast unit tests). `bun run test:browser` (needs Playwright and its Chromium; see `README.md`). `bun run test:all` runs both. The Worker entry test writes `instances/<id>/dist/widget.js` (ignored by git); `bun scripts/build-widget.mjs` writes it too.
+The git history scan (`bun scripts/history-scan.mjs .`) was already red on the head of PR 1: two old commits (C1 to C3 and audit fixes 1) hold fake sample e-mail and phone numbers in test files that the tree scan exempts. This PR adds none.

@@ -5,10 +5,18 @@ import { test, expect, beforeAll, afterAll } from 'bun:test';
 import { launchBrowser, makeRig, ui, EVIL } from './rig.mjs';
 import { STANDARD_AI_LINE, checkStrings } from '../../contract/strings-rules.mjs';
 import { NOTICE } from '../../core/src/strings.js';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-let browser;
-beforeAll(async () => { browser = await launchBrowser(); });
-afterAll(async () => { if (browser) await browser.close(); });
+let browser, built;
+beforeAll(async () => {
+  browser = await launchBrowser();
+  // the file the build script writes for one instance, exactly as `bun scripts/build-widget.mjs corporatetambola` makes it (the first test serves this very file)
+  const out = mkdtempSync(join(tmpdir(), 'mpc-built-')), r = Bun.spawnSync(['bun', 'scripts/build-widget.mjs', 'corporatetambola', '--out', out], { cwd: new URL('../../', import.meta.url).pathname });
+  if (r.exitCode !== 0) throw new Error('build script failed: ' + r.stderr.toString()); built = { out, file: join(out, 'corporatetambola', 'widget.js') };
+});
+afterAll(async () => { if (browser) await browser.close(); if (built) rmSync(built.out, { recursive: true, force: true }); });
 const T = 120_000, H = 3600e3;
 const AI_URL = /^https:\/\/home\.corporatetambola\.com\/ai\/[A-Za-z0-9_-]{22}\?k=mpk_[A-Za-z0-9]{40}$/;
 const ORG = { role: 'organizer', user_id: 'user-1001' };
@@ -22,8 +30,9 @@ const stuck = async (page, what = 'The link does not open for players') => { // 
 const bytes = (s) => [...new TextEncoder().encode(s)];
 
 test('LOADS: the built file is served with the right headers and mounts one shadow-root host; nothing lands in the page; no cookie, storage or console error', async () => {
-  const rig = await makeRig(), { page, context, errors, requests } = await person(rig);
+  const rig = await makeRig({ widgetFile: built.file }), { page, context, errors, requests } = await person(rig);
   const js = requests.find((r) => r.path === '/mpc/widget.js'); expect(js.status).toBe(200);
+  expect(await page.evaluate(async () => (await fetch('/mpc/widget.js')).text())).toBe(readFileSync(built.file, 'utf8')); // the browser got the built file, byte for byte
   expect(js.resHeaders['content-type']).toStartWith('text/javascript'); expect(js.resHeaders['cache-control']).toBe('public, max-age=300');
   expect(js.resHeaders['set-cookie']).toBeUndefined(); expect(js.resHeaders['access-control-allow-origin']).toBeUndefined();
   const dom = await page.evaluate(() => { const hosts = [...document.body.children].filter((e) => e.shadowRoot); const fab = hosts[0].shadowRoot.querySelector('.fab'), r = fab.getBoundingClientRect();

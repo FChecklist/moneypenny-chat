@@ -39,9 +39,22 @@ test('S-051 the widget draws in a shadow root with its own style; the page gets 
   expect(CSS).toContain(':host{all:initial'); expect(CSS).toContain('--mpc-primary'); expect(CSS).toContain('min-height:44px');
   expect(w.root.all('button')[0].attrs['aria-expanded']).toBe('false');
 });
-test('S-051 no cookies and no storage: the widget code does not touch them', () => {
-  for (const f of readdirSync(new URL('../widget', import.meta.url), { recursive: true }).filter((x) => x.endsWith('.js'))) { const t = readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8'); expect(t).not.toMatch(/document\.cookie|localStorage|sessionStorage|indexedDB/); }
-  expect(readFileSync(new URL('../widget/api.js', import.meta.url), 'utf8')).toContain("credentials: 'same-origin'");
+// 0.4.2: the 0.4.0 test read the widget SOURCE with a regex for cookie and storage words. That says nothing about what the code does. This one USES the widget through a whole visit
+// (open, idea, send, problem, status, copy link) while every cookie, storage and cache door throws if it is touched. The real-browser test (tests/browser) checks the same in Chromium.
+test('S-051 no cookies and no storage: a whole visit with every cookie and storage door throwing', async () => {
+  const doors = ['localStorage', 'sessionStorage', 'indexedDB', 'caches', 'cookieStore'], saved = doors.map((d) => Object.getOwnPropertyDescriptor(globalThis, d));
+  for (const d of doors) Object.defineProperty(globalThis, d, { configurable: true, get() { throw new Error('widget touched ' + d); } });
+  const inits = [];
+  try {
+    const doc = fakeDoc(); Object.defineProperty(doc, 'cookie', { get() { throw new Error('widget read document.cookie'); }, set() { throw new Error('widget set document.cookie'); } });
+    const fetchFn = async (u, init) => { inits.push([u, init]); return init.method === 'POST' ? new Response(JSON.stringify({ ticket: 'T-0005', status_token: 'tok-5' }), { status: 201 }) : new Response(JSON.stringify({ ticket: 'T-0005', status: 'new', team_note: '' }), { status: 200 }); };
+    const w = mountWidget({ ...cfg(), doc, api: makeApi({ fetchFn, sleep: async () => {} }), aiLink: async () => 'https://p.example/ai/1?k=x', clipboard: { writeText: async () => {} } }); w.open();
+    for (const id of ['go:suggest', 'type:option']) w.act(id); w.panel.all('textarea')[0].value = 'a long enough idea'; w.panel.all('textarea')[0].oninput(); await w.act('send');
+    for (const id of ['home', 'go:stuck', 'where:here', 'stuck:s1', 'next']) w.act(id); await w.act('send'); await w.act('status'); w.act('home'); w.act('go:help'); w.act('topic:a-topic'); w.close();
+    expect(w.state().screen).toBe('help.answer'); expect(inits.length).toBe(3); // 2 sends and 1 status call
+  } finally { doors.forEach((d, i) => (saved[i] ? Object.defineProperty(globalThis, d, saved[i]) : delete globalThis[d])); }
+  for (const [, init] of inits) { expect(init.credentials).toBe('same-origin'); expect(init.cache).toBe('no-store'); } // the product's own session cookie goes with the call; the widget adds none
+  expect(inits.every(([u]) => u.startsWith('/mpc/v1/'))).toBe(true); // and only to this instance's own path
 });
 test('S-052 home has exactly 3 buttons in the owner order', () => {
   const v = walk(); expect(v.controls.filter((c) => c.kind === 'button').length).toBe(3);
@@ -102,7 +115,7 @@ test('S-056 notice line with a Terms link on 2.2 and 3.5; no checkbox anywhere; 
   const m = mount(); m.w.open(); m.w.act('go:suggest'); m.w.act('type:option');
   const a = m.w.panel.all('a'); expect(a.length).toBe(1); expect(a[0].attrs.rel || a[0].rel).toBeTruthy(); expect(a[0].href).toBe('https://p.example/terms'); expect(m.texts()).toContain(NOTICE);
   expect(m.w.panel.all().filter((e) => e.tag === 'input' && e.type === 'checkbox').length).toBe(0);
-  for (const f of readdirSync(new URL('../widget', import.meta.url), { recursive: true }).filter((x) => x.endsWith('.js'))) expect(readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, '$1')).not.toMatch(/checkbox|type\s*=\s*['"]?radio/i);
+  // (0.4.0 stripped comments from the source and searched it for "checkbox"; the real DOM of every screen is scanned in tests/browser/widget.browser.mjs instead)
   expect(view(s2, cfg()).controls.find((c) => c.kind === 'privacy').text).toBe(PRIVACY);
 });
 test('S-057 the standard AI line is exact on 1.2, 2.4 and 3.6, each with Copy link; not on home', () => {
@@ -177,7 +190,6 @@ test('round 6 widget output has no tick box: no aria-checked, no aria-pressed an
   scan(); for (const id of ['go:help', 'back', 'go:suggest', 'type:option', 'back', 'go:stuck', 'where:here', 'stuck:s1', 'next']) { try { m.w.act(id); } catch {} scan(); }
   expect(seen.length).toBeGreaterThan(10);
   for (const n of seen) { expect(n.tag).not.toBe('input'); expect(n.attrs?.['aria-checked']).toBeUndefined(); expect(n.attrs?.['aria-pressed']).toBeUndefined(); }
-  for (const src of [readFileSync(new URL('../widget/widget.js', import.meta.url), 'utf8'), readFileSync(new URL('../widget/model.js', import.meta.url), 'utf8')]) expect(src).not.toMatch(/aria-checked|aria-pressed|createElement\(['"]input['"]|<input/i);
 });
 
 // ---- 0.4.2: found by the real-browser tests (tests/browser). The fake fetch above hid both of these.

@@ -22,7 +22,7 @@ test('C10 one built file per instance; it holds that instance only; no secret na
     const js = bundles[id], other = IDS.find((x) => x !== id);
     expect(js.length).toBeGreaterThan(2000); expect(js).toContain('"' + id + '"'); expect(js).not.toContain(other === 'veridian-aios' ? 'veridian-aios.com' : '"' + other + '"');
     expect(js).not.toMatch(/SECRET_|key_hash|assert|import\s*\(|^import /m); expect(js).toContain('/mpc/ai-link'); expect(js).toContain(rd(id, 'strings.json').help_topics[0].label);
-    expect(js).not.toMatch(/document\.cookie|localStorage|sessionStorage/);
+    // cookies and storage: not a word search on the file; a real Chromium visit checks them (tests/browser/widget.browser.mjs)
   }
 });
 test('C10 the build refuses an unknown instance', async () => { await expect(buildWidget('nope')).rejects.toThrow('unknown instance'); await expect(buildWidget('lib')).rejects.toThrow('unknown instance'); });

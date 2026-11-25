@@ -7,7 +7,7 @@ test('S-015 table over every F3 code: status, shape, version header, simple mess
     const r = fail(code); const b = await r.json();
     expect(r.status, code).toBe(status); expect(b.error).toBe(code); expect(b.message.length).toBeGreaterThan(3);
     expect(b.message.split('.').filter(Boolean).length, code).toBeLessThanOrEqual(2);
-    expect(r.headers.get('x-mpc-core-version')).toBe('0.4.1'); expect(r.headers.get('content-type')).toBe('application/json');
+    expect(r.headers.get('x-mpc-core-version')).toBe('0.4.2'); expect(r.headers.get('content-type')).toBe('application/json');
   }
 });
 test('S-015 added code no_team_login is 401; extras are merged; unknown code becomes try_later', async () => {

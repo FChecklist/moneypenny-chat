@@ -4,3 +4,7 @@ node_modules/
 .env
 *.log
 dist/
+# no lock file is committed (owner rule); Playwright for the browser tests is installed outside the repo
+package-lock.json
+bun.lock
+bun.lockb

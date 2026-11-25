@@ -52,9 +52,9 @@ const productPage = (hostile) => `<!doctype html><html lang="en"><head><meta cha
 const bundles = new Map(); // one build per distinct record: the build takes a moment
 const bundle = async (cfg, str) => { const k = JSON.stringify([cfg, str]); if (!bundles.has(k)) bundles.set(k, await buildBundle(cfg, str)); return bundles.get(k); };
 
-export async function makeRig({ id = 'corporatetambola', store = 'd1', config = {}, strings = {} } = {}) {
+export async function makeRig({ id = 'corporatetambola', store = 'd1', config = {}, strings = {}, widgetFile } = {}) { // widgetFile: serve a file made by the build script instead of building in memory
   const cfg = { ...rd(id, 'instance.json'), ...config }, str = { ...rd(id, 'strings.json'), ...strings };
-  const widgetJs = await bundle(cfg, str), origin = cfg.allowed_origins[0];
+  const widgetJs = widgetFile ? readFileSync(widgetFile, 'utf8') : await bundle(cfg, str), origin = cfg.allowed_origins[0];
   const skew = { ms: 0 }, now = () => Date.now() + skew.ms;
   const core = makeEnv({ store, instance: cfg, now, team: true }); // team: true is the stub login of the test harness, only so a test can play the team
   const keys = mockProduct({ now }), logins = new Map(), seen = [], state = { fault: false };
