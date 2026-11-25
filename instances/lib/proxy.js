@@ -15,6 +15,8 @@ const ROUTES = [['POST', /^\/mpc\/v1\/tickets$/, () => '/v1/tickets'], ['GET', /
 export const AI_KINDS = { help: ['read_event'], suggest: ['read_event'], stuck: ['read_event', 'read_ticket'] }; // read only scopes; the organizer can approve more on the AI page later
 const AI_TTL_S = 3600;
 
+export const configReply = (config, strings) => reply(200, { id: config.id, name: config.name, brand: config.brand || null, kb_version: config.kb_version || null, strings });
+
 // Refuses a bad config at start, not at the first call.
 export function checkConfig(config, strings) {
   const v = validateInstance(config); if (!v.ok) throw new Error('instance: ' + v.errors.join('; '));
@@ -49,7 +51,7 @@ export function createInstance({ config, strings, secrets, product, core, now = 
     const url = new URL(req.url), path = url.pathname, m = req.method;
     try {
       if (m === 'GET' && path === '/mpc/config.json') { // public: text and colours only
-        return reply(200, { id: config.id, name: config.name, brand: config.brand || null, kb_version: config.kb_version || null, strings });
+        return configReply(config, strings);
       }
       const rt = ROUTES.find(([rm, re]) => rm === m && re.test(path)), ai = m === 'POST' && path === '/mpc/ai-link';
       if (!rt && !ai) return err(404, 'not_found', 'Not found.');
@@ -71,7 +73,7 @@ export function createInstance({ config, strings, secrets, product, core, now = 
       // POST /mpc/ai-link {kind, ticket?, screen?}: the product mints the key; the core keeps only its hash; this server adds k.
       let b; try { b = JSON.parse(await req.text()); } catch { b = null; }
       if (!b || !Object.hasOwn(AI_KINDS, b.kind)) return err(400, 'bad_request', 'Something in the request is wrong. Check the fields.'); // unknown kind: refused, no default scopes
-      const k = await product.mintKey({ session: who.sess, scopes: AI_KINDS[b.kind], ttl_s: AI_TTL_S });
+      const k = await product.mintKey({ session: who.user_id || who.sess, scopes: AI_KINDS[b.kind], ttl_s: AI_TTL_S });
       if (k.status !== 201) return err(503, 'try_later', 'Please try again in a moment.');
       const body = new TextEncoder().encode(JSON.stringify({ scopes: k.body.scopes, ttl_s: AI_TTL_S, key_hash: k.body.key_hash, product_key_id: k.body.product_key_id, ...(typeof b.ticket === 'string' ? { ticket: b.ticket } : {}), ...(typeof b.screen === 'string' ? { screen: b.screen } : {}) }));
       const r = await toCore('POST', '/v1/ai-links', req, body, who, { 'content-type': 'application/json', 'idempotency-key': req.headers.get('idempotency-key') || HEX(16) });

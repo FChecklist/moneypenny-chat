@@ -129,7 +129,15 @@ Not confirmed by the owner. Choices and accepted limits:
 ## Round 5 notes (version 0.3.1)
 - **Link scopes.** No ticket: read-only scopes only. With a ticket: help and suggest are read-only, stuck may hold every listed scope (the organizer still has to approve the plan before write steps).
 - **Accepted, not defects.** Ticket text is visible to the key holder for 24 hours by design. The screenshot blob stored twice is erased after 1 hour and accepted.
-- **NOT BUILT YET (C10 to C12).**
-  - *C10 widget bundle serving.* Interface: `GET /mpc/widget.js` on each instance returns the built ES module of `core/widget/` (`mountWidget({strings, screenLabel, doc, ...})`), `content-type: text/javascript`, `cache-control: public, max-age=300`, same origin only, no cookies.
-  - *C11 real session adapter per product.* Interface: `product.session(req) -> { role: string, sess: string } | null` (role from the product server session, never the page; `null` = not signed in) and `product.mintKey({ session, scopes, ttl_s }) -> { status, body }`.
-  - *C12 instance Worker entry and `wrangler.toml` per product* wiring the two above into `createInstance`.
+
+## C10 to C12 notes (version 0.4.0)
+Not confirmed by the owner. Built: widget bundle and Worker entry (C10), session adapter (C11), screenshot capture, masking and editor (C12). Choices and accepted limits:
+- **Tested without Cloudflare and without a browser.** `wrangler deploy --dry-run`, a real bundle load in a browser, and a real product session were not run. See `KNOWLEDGE.md`.
+- **Widget cookies.** The widget sends requests with `credentials: 'same-origin'` so the product's own session cookie reaches `/mpc` on the same host. The widget and the instance Worker never set or read a cookie (the Worker reads only the `cookie` and `authorization` headers to pass them to the product, server to server).
+- **Adapter wire format** (an interface of this repo, not checked against any real product): `GET /mpc/session` answers `200 {role, user_id}`; `401`, `403` or `204` mean not signed in; any other status is a product fault and the instance answers 503. `sess` for the core is a one-way id (first 32 hex of sha256 of `mpc-sess|<user_id>`); the raw user id goes only to the product for `mintKey`.
+- **PRODUCT binding** is commented in each `wrangler.toml` until the owner gives the product Worker name. Routes use a `zone_name` taken from the host name; owner to confirm.
+- **Widget file cache** is 300 seconds. After a deploy a page can show the old widget for up to 5 minutes.
+- **No picture engine.** The DOM-to-pixels engine (spec S-060) is not vendored (no network in the build run). `makeCapture` takes `render(doc)` and `toBlob(image, type, quality)` as parts; the widget boot does not set `capture`, so the screenshot button stays hidden until the owner approves an engine and wiring. EXIF removal relies on re-encoding from pixels (`canvas.toBlob`); the encoder was not run.
+- **Masking limits.** Text outside fields is hidden only when the product marks it `data-mpc-hide`. A secret in a field with a plain name and a plain type (for example a text box holding a short code) is not found. The editor is drag only; a keyboard way to place boxes is not built. Blur is coarse blocks; Hide is the safe choice.
+- **Voter-list screens (I8).** `takePicture` takes a `blocked()` check, but no instance sets it yet: the owner has not decided, and the route table is empty.
+- **Capture assumes the picture starts at the top left of the visible page** (field boxes are in viewport pixels, scaled by picture width over `innerWidth`).

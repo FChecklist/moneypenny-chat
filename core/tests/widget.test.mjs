@@ -40,8 +40,8 @@ test('S-051 the widget draws in a shadow root with its own style; the page gets 
   expect(w.root.all('button')[0].attrs['aria-expanded']).toBe('false');
 });
 test('S-051 no cookies and no storage: the widget code does not touch them', () => {
-  for (const f of readdirSync(new URL('../widget', import.meta.url))) { const t = readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8'); expect(t).not.toMatch(/document\.cookie|localStorage|sessionStorage|indexedDB/); }
-  expect(readFileSync(new URL('../widget/api.js', import.meta.url), 'utf8')).toContain("credentials: 'omit'");
+  for (const f of readdirSync(new URL('../widget', import.meta.url), { recursive: true }).filter((x) => x.endsWith('.js'))) { const t = readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8'); expect(t).not.toMatch(/document\.cookie|localStorage|sessionStorage|indexedDB/); }
+  expect(readFileSync(new URL('../widget/api.js', import.meta.url), 'utf8')).toContain("credentials: 'same-origin'");
 });
 test('S-052 home has exactly 3 buttons in the owner order', () => {
   const v = walk(); expect(v.controls.filter((c) => c.kind === 'button').length).toBe(3);
@@ -102,7 +102,7 @@ test('S-056 notice line with a Terms link on 2.2 and 3.5; no checkbox anywhere; 
   const m = mount(); m.w.open(); m.w.act('go:suggest'); m.w.act('type:option');
   const a = m.w.panel.all('a'); expect(a.length).toBe(1); expect(a[0].attrs.rel || a[0].rel).toBeTruthy(); expect(a[0].href).toBe('https://p.example/terms'); expect(m.texts()).toContain(NOTICE);
   expect(m.w.panel.all().filter((e) => e.tag === 'input' && e.type === 'checkbox').length).toBe(0);
-  for (const f of readdirSync(new URL('../widget', import.meta.url))) expect(readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, '$1')).not.toMatch(/checkbox|type\s*=\s*['"]?radio/i);
+  for (const f of readdirSync(new URL('../widget', import.meta.url), { recursive: true }).filter((x) => x.endsWith('.js'))) expect(readFileSync(new URL('../widget/' + f, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\/|(^|[^:])\/\/.*$/gm, '$1')).not.toMatch(/checkbox|type\s*=\s*['"]?radio/i);
   expect(view(s2, cfg()).controls.find((c) => c.kind === 'privacy').text).toBe(PRIVACY);
 });
 test('S-057 the standard AI line is exact on 1.2, 2.4 and 3.6, each with Copy link; not on home', () => {

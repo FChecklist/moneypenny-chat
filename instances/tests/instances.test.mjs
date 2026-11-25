@@ -133,5 +133,5 @@ test('co-organizer: the product role "host" is stored as co-organizer; DNT reach
 });
 test('the proxy sets and reads no cookies; the standard line is imported, not copied; version notes exist', () => {
   const src = readFileSync(new URL('../lib/proxy.js', import.meta.url), 'utf8'); expect(src).not.toMatch(/set-cookie|req\.headers\.get\('cookie'\)|document\.cookie/i);
-  expect(src).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.3.1'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.3.1');
+  expect(src).not.toContain(STANDARD_AI_LINE); expect(VERSION).toBe('0.4.0'); expect(readFileSync(new URL('../../CHANGELOG.md', import.meta.url), 'utf8')).toContain('## 0.4.0');
 });

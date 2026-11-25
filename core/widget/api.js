@@ -6,7 +6,7 @@ export function makeApi({ base = '/mpc', fetchFn = (...a) => fetch(...a), sleep 
   async function once(path, init) {
     let last;
     for (let i = 0; i <= RETRY.length; i++) {
-      try { const r = await fetchFn(base + path, { ...init, credentials: 'omit', cache: 'no-store' }); if (![502, 503, 504].includes(r.status)) return r; last = r; } catch (e) { last = null; }
+      try { const r = await fetchFn(base + path, { ...init, credentials: 'same-origin', cache: 'no-store' }); if (![502, 503, 504].includes(r.status)) return r; last = r; } catch (e) { last = null; }
       if (i < RETRY.length) await sleep(RETRY[i]);
     }
     return last;

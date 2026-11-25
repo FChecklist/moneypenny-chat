@@ -21,3 +21,10 @@ A mock product that follows this contract is in `core/tests/mock-product/`.
 
 ## Screenshots, team mail, AI links (0.2.0)
 `POST /v1/screenshots`: the body is the file; the signature covers the SHA-256 of the bytes. The standard line "Copy this link and paste in your AI to work." is defined once in `strings-rules.mjs` and in the core `strings.js`; a test compares both to the owner line byte for byte.
+
+## Product session adapter (0.4.0)
+Interface the instance Worker uses (reference: `instances/lib/adapter.js`, `httpAdapter`):
+- `adapter.session(req) -> { role, user_id, sess } | null`. `null` means not signed in. The role and user id come from the product server, never from the page. The instance asks `GET /mpc/session` on the product (service binding, private) and forwards only the `cookie` and `authorization` headers of the browser request. Product answers `200 {role, user_id}` (`role`: lower case letters, digits and `-`, up to 32; `user_id`: printable, no spaces, up to 128). `401`, `403`, `204`: not signed in. Any other status, bad JSON or a network fault throws, and the instance answers 503 `try_later` (never a default role). A wrong shape gives `null`.
+- The instance then maps the role with `role_map` and refuses roles it does not know.
+- `adapter.mintKey({ session, scopes, ttl_s }) -> { status, body }`: calls `POST /mpc/ai-key` (above). `session` is the raw `user_id`. The answer is refused (502) when the key is not `mpk_` plus 40 characters, `key_hash` is not the sha256 of the key, or `scopes` are wider than asked.
+- A product that cannot give a role for a page (static pages) must answer `401`. Do not trust a role in the page, a query or a body.

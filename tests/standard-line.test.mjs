@@ -9,8 +9,8 @@ test('S-049 the line equals the owner line byte for byte: 44 ASCII bytes, full s
   expect(RULE).toBe(CORE);
 });
 test('S-049 the line is written out in only these two files of the core and the contract; every other place imports it', () => {
-  const hits = [];
-  const walk = (dir) => { for (const d of readdirSync(dir, { withFileTypes: true })) { if (d.name === 'node_modules' || d.name === '.git') continue; const p = dir + '/' + d.name; if (d.isDirectory()) walk(p); else if (/\.(js|mjs|md|html|json|toml)$/.test(d.name) && readFileSync(p, 'utf8').includes('Copy this link and paste in your AI to work.')) hits.push(p.replace(new URL('..', import.meta.url).pathname, '')); } };
+  const hits = []; // dist folders are built bundles (generated, git-ignored); they hold the imported line and are skipped
+  const walk = (dir) => { for (const d of readdirSync(dir, { withFileTypes: true })) { if (d.name === 'node_modules' || d.name === '.git' || d.name === 'dist') continue; const p = dir + '/' + d.name; if (d.isDirectory()) walk(p); else if (/\.(js|mjs|md|html|json|toml)$/.test(d.name) && readFileSync(p, 'utf8').includes('Copy this link and paste in your AI to work.')) hits.push(p.replace(new URL('..', import.meta.url).pathname, '')); } };
   walk(new URL('..', import.meta.url).pathname.replace(/\/$/, ''));
   const allowed = new Set(['contract/strings-rules.mjs', 'core/src/strings.js', 'tests/standard-line.test.mjs', 'tests/strings.test.js', 'docs/DECISIONS.md', 'CHANGELOG.md', 'core/CHANGELOG.md', 'contract/README.md', 'README.md']);
   expect(hits.filter((h) => !allowed.has(h))).toEqual([]); expect(hits).toContain('core/src/strings.js'); expect(hits).toContain('contract/strings-rules.mjs');

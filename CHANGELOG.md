@@ -1,5 +1,13 @@
 # Moneypenny Chat changelog
 
+## 0.4.0 - 25 Nov 2026 - C10 to C12: widget bundle, Worker entry, session adapter, screenshot capture
+- Widget bundle: `bun scripts/build-widget.mjs [id]` writes one file per instance, `instances/<id>/dist/widget.js` (not in git). `core/widget/boot.js` is the entry; the public instance record (text, colours, route table) is baked in. Served at `GET /mpc/widget.js` (`text/javascript`, `cache-control: public, max-age=300`, no cookie, no CORS header).
+- Worker entry per instance: `instances/<id>/worker.js` and `wrangler.toml` (routes for `/mpc/*` on each allowed host, `CORE` service binding, `PRODUCT` binding commented until the owner gives the name, build command, no secrets). Logic in `instances/lib/worker.js`. The widget file and `/mpc/config.json` are served even when secrets or bindings are missing; proxy calls then answer 503 `try_later`.
+- Session adapter: `instances/lib/adapter.js` (`httpAdapter`). Role and user id are read from the product server (`GET /mpc/session`); the page cannot set them. A product fault fails closed. Contract in `contract/README.md`. The proxy now gives the product the raw user id for `mintKey` when the adapter has one.
+- Capture library `core/widget/shot/`: secret-field masking (password, email, tel, number, token, key, card-like and `data-mpc-hide` fields are blanked and restored; their boxes are also burned black in the pixels), editor (Hide, Blur, Undo, Clear, Use picture, Discard), size cap (1600 px, 1.5 MB), nothing sent from the library.
+- Widget requests use `credentials: 'same-origin'` (was `omit`) so the product session cookie reaches `/mpc` on the same host. The widget still reads, sets and stores no cookie.
+- Tests: `instances/tests/bundle-worker.test.mjs`, `core/tests/capture.test.mjs`.
+
 ## 0.3.1 - 25 Nov 2026 - round 5 fixes
 - AI links: a link with no ticket may hold only read-only scopes (`read_ticket`, `read_event`, `report`); a link with a ticket may not exceed its class (help and suggest: read-only; stuck: all listed scopes). Others are refused with `bad_request`, field `scopes`.
 - AI notes: the forbidden-action check (pay, delete and so on) now runs for done and blocked notes too.
