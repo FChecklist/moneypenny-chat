@@ -175,7 +175,7 @@
     },
     "/v1/screenshots": {
       "post": {
-        "summary": "Upload a screenshot (png, jpeg or webp, up to 2 MB). Held 1 hour unless a ticket uses it.",
+        "summary": "Upload a screenshot (png, jpeg or webp, up to 2 MB). Held 1 hour unless a ticket uses it. Only the session that uploaded it (same role proof session, same instance) can attach it to a ticket.",
         "x-status": "built",
         "security": [
           {
@@ -1558,7 +1558,8 @@
           },
           "screenshot_id": {
             "type": "string",
-            "nullable": true
+            "nullable": true,
+            "description": "A file uploaded by the same session in the same instance, not yet on another ticket. Anything else: 400, field screenshot_id."
           },
           "role": {
             "enum": [

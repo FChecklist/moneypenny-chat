@@ -88,7 +88,7 @@ async function shot(ctx, req, path) {
   if (!a.ok) return fail(a.error);
   const addr = req.headers.get('x-mpc-ip');
   if (!addr && inst.require_ip === true) return fail('bad_request', { field: 'x-mpc-ip' });
-  return out(await uploadShot(ctx, inst, { bytes, contentType: req.headers.get('content-type'), idemHeader: req.headers.get('idempotency-key'), ip: addr || 'sess:' + (await sha256hex(a.sess)) }));
+  return out(await uploadShot(ctx, inst, { bytes, contentType: req.headers.get('content-type'), idemHeader: req.headers.get('idempotency-key'), ip: addr || 'sess:' + (await sha256hex(a.sess)), sess: a.sess }));
 }
 
 // S-040 and S-041: the team page. Same login as the team calls. No external scripts: the page loads one file from the same origin.

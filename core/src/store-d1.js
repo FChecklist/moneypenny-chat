@@ -56,9 +56,10 @@ export function d1Store(db) {
 
     // C4 screenshots, erase, audit
     async putIdem(instance, kh, bodyHash, response, now) { await db.prepare('INSERT OR IGNORE INTO idempotency (instance, key_hash, body_hash, response, expires) VALUES (?,?,?,?,?)').bind(instance, kh, bodyHash, JSON.stringify(response), now + IDEM_TTL_MS).run(); },
-    async putShot(r) { await db.prepare('INSERT INTO shot (id, instance, key, bytes, ctype, ticket, created, erase_at) VALUES (?,?,?,?,?,?,?,?)').bind(r.id, r.instance, r.key, r.bytes, r.ctype, r.ticket, r.created, r.erase_at).run(); },
+    async putShot(r) { await db.prepare('INSERT INTO shot (id, instance, key, bytes, ctype, ticket, created, erase_at, sess_hash) VALUES (?,?,?,?,?,?,?,?,?)').bind(r.id, r.instance, r.key, r.bytes, r.ctype, r.ticket, r.created, r.erase_at, r.sess_hash ?? null).run(); },
     async getShot(instance, id, now) { return (await db.prepare('SELECT * FROM shot WHERE instance=? AND id=? AND erase_at>?').bind(instance, id, now).first()) || null; },
-    async claimShot(instance, id, now) { return (await db.prepare("UPDATE shot SET ticket='claim' WHERE instance=? AND id=? AND ticket IS NULL AND erase_at>?").bind(instance, id, now).run()).meta.changes > 0; },
+    // Keyed by instance AND session. A row with no sess_hash (NULL) never equals a hash, so an old row can never be claimed.
+    async claimShot(instance, id, sessHash, now) { if (typeof sessHash !== 'string' || !sessHash) return false; return (await db.prepare("UPDATE shot SET ticket='claim' WHERE instance=? AND id=? AND sess_hash=? AND ticket IS NULL AND erase_at>?").bind(instance, id, sessHash, now).run()).meta.changes > 0; },
     async attachShot(instance, id, number, eraseAt) { await db.prepare('UPDATE shot SET ticket=?, erase_at=? WHERE instance=? AND id=?').bind(number, eraseAt, instance, id).run(); },
     async releaseShot(instance, id) { await db.prepare("UPDATE shot SET ticket=NULL WHERE instance=? AND id=? AND ticket='claim'").bind(instance, id).run(); },
     async setShotErase(instance, number, eraseAt) { await db.prepare('UPDATE shot SET erase_at=? WHERE instance=? AND ticket=?').bind(eraseAt, instance, number).run(); },
