@@ -9,6 +9,15 @@
 //                   what a thing does ("the next step would charge a card"), and, in a blocked note only, a state ("the booking was cancelled").
 //                 The payment provider's name is always refused. So are a claim ("I paid", "Order refunded"), a request ("please pay", "Delete the game",
 //                 "Next, pay the invoice"), intent ("I will delete it"), sending credits, and asking for "your password".
+// 0.4.3 (review of 0.4.2): what lets a listed word through is now narrower.
+//   - A negation counts only within 3 words before the listed word ("did not pay", "could not press the Delete button"), not anywhere earlier in the clause.
+//   - A hand-off word ("a person", "the team") or a "the page says" word still counts anywhere in its clause, but never when the clause also holds a push word:
+//     a strong word ("please", "click", "select"), an ask word ("send", "enter", "make") that is not the hand-off's own ("ask the organizer to pay", "the page asks me to
+//     enter a password", "a person needs to top up credits"), or "I/we/you" with a past verb ("I told the team and deleted it"). A push word that is itself negated ("did not click") does not count.
+//   - "so", "then" and "because" start a new thought: nothing before them speaks for a listed word after them ("Cannot wait so delete the game").
+//   - "yourself" no longer lets a word through ("Delete the game yourself" is a request).
+//   - In a blocked note a state ("was cancelled", "was deleted", "removed") passes only when what it says about is a thing of the screen: page, screen, form, session, link, step,
+//     upload, picture. "The booking was cancelled" is refused: the same words can hide that the AI did it.
 // Reports are read one clause at a time (a comma, "but" or a full stop ends a clause; a new "I" or "you" starts a new one). That is a small, readable rule, not
 // language understanding: someone can always word a request another way, and a report can say something false. Tests: core/tests/note-words.test.js, both sides.
 
@@ -38,7 +47,7 @@ const MONEY = set('credit credits payment payments payout payouts'), SECRET = se
 const SOFT = set('now then just');                                                                                    // "now pay", but also "Now the Cancel button is greyed out"
 const NEG = set('not never no cannot nothing nobody none without unable neither nor');                                // "I did not pay", "nothing was deleted"
 const NEG_AFTER = set('nothing nobody none never');                                                                   // "players pay nothing"
-const HAND = set('person people human humans someone somebody organizer organizers co-organizer co-organizers host hosts team owner admin staff support yourself'); // handed to a person: "a person must pay"
+const HAND = set('person people human humans someone somebody organizer organizers co-organizer co-organizers host hosts team owner admin staff support'); // handed to a person: "a person must pay"
 const SAY = set('asks asked asking says said saying requires required requiring prompts prompted prompting wants wanted shows showed showing displays displayed lists listed explains explained describes described mentions mentioned states stated warns warned offers offered how'); // what the page says: "the page asks me to enter a password"; "how to ..."
 const STRONG = set('please kindly lets let ahead click clicked clicking press pressed pressing tap tapped tapping hit select selected selecting choose chose chosen choosing confirm confirmed confirming approve approved approving accept accepted accepting'); // "please pay", "click Pay", "I clicked the Delete button"
 const SPEAKER = set('i we you');                                                                                      // "I will delete", "you should refund"
@@ -60,6 +69,13 @@ const COMPOUND = set('rule rules info information help fee fees limit limits ter
 const OBJECT = set('email emails e-mail e-mails password passwords passcode passcodes');                              // what makes change/update/reset/replace a forbidden verb
 const ASK = set('complete completed completing make made making process processed processing submit submitted submitting authorize authorise confirm approve release released releasing settle send sent sending give gave given giving add added adding top top-up topup spend spent spending wire wired wiring deposit deposited depositing move moved moving grant granted granting award awarded awarding issue issued issuing allocate allocated allocating assign assigned assigning enter type paste share reveal provide supply tell use finish initiate start proceed apply redeem set email text reply ask');
 const ASK_PAST = set('sent given added spent moved granted awarded issued released deposited wired topped completed processed made');  // "credits were sent to the new owner"
+const CUT = set('so then because since thus therefore');                                                              // starts a new thought: nothing before it speaks for a listed word after it
+const NEAR = 3;                                                                                                       // a negation counts only this many words before the listed word
+const HAVE = set('has have had will would can could may might must should');                                          // "has been cancelled", "would be removed"
+const OWNV = set('to must should shall can could may might will would');                                        // before a hand-off's own verb: "needs to top up", "must top up"
+const HAVE_V = set('have has had');
+const PREP = set('of for with by in on at from about per to');                                                        // "the access to the game": not a plain thing of the screen
+const SAFE_SUBJECT = set('page pages screen screens form forms session sessions link links step steps upload uploads picture pictures'); // what may "be cancelled" in a blocked note
 
 // Lower case, contractions opened up ("couldn't" -> "could not", "I'll" -> "i"), then one list of words per sentence. A comma stays as a word so a list can be told from a new clause.
 const sentences = (text) => text.toLowerCase().replace(/[‘’]/g, "'").replace(/\b(i|we|you|they)'(?:ll|ve|d|m|re)\b/g, '$1').replace(/n't\b/g, ' not').replace(/'s\b/g, '')
@@ -75,8 +91,36 @@ function around(w, i) {
 }
 const clauseStart = (w, i) => { let j = i - 1; while (j >= 0 && LEAD.has(w[j])) j--; return j < 0 || w[j] === ',' || BREAK.has(w[j]); };
 const numeric = (t) => /^\d+$/.test(t || '');
-// "was", "were", "is", "are", "been" before a past word, even through "and", an adverb or another past word: a passive, so a state.
-function passive(w, i) { let j = i - 1; while (j >= 0 && (CONJ.has(w[j]) || ADV.has(w[j]) || /ed$/.test(w[j]) || listed(w, j))) j--; return j >= 0 && AUX.has(w[j]); }
+// Where "was", "were", "is", "are", "been" stands before the past word at i, even through "and", an adverb or another past word: a passive, so a state. -1 when it is not one.
+function auxAt(w, i) { let j = i - 1; while (j >= 0 && (CONJ.has(w[j]) || ADV.has(w[j]) || /ed$/.test(w[j]) || listed(w, j))) j--; return j >= 0 && AUX.has(w[j]) ? j : -1; }
+// What is "was cancelled" about? The words just before the aux (5 at most, no comma, no "of/to/on ..."): the last one must be a thing of the screen. "The booking was cancelled",
+// "my access to the game was removed", "it was removed" are not. Hiding who did it behind "was" is how a claim would look. A subject joined by "and" or "or" is checked
+// part by part ("the booking and the page were cancelled" is refused); an earlier part that holds a verb of its own is another clause and is left alone.
+function safeSubject(w, a) {
+  let e = a, first = true;
+  for (;;) {
+    while (e > 0 && (HAVE.has(w[e - 1]) || ADV.has(w[e - 1]))) e--;
+    const ph = []; let j = e - 1;
+    for (; j >= 0 && ph.length < 5; j--) { const x = w[j]; if (x === ',' || CONJ.has(x) || BREAK.has(x) || CUT.has(x)) break; ph.unshift(x); if (SUBJECT.has(x)) { j--; break; } }
+    if (!first && ph.some((x) => AUX.has(x) || /ed$/.test(x))) return true;                                        // an earlier clause with its own verb
+    if (!ph.length || !SAFE_SUBJECT.has(ph[ph.length - 1]) || ph.some((x) => SUBJECT.has(x) || PREP.has(x))) return false;
+    if (j < 0 || !(CONJ.has(w[j]) || w[j] === ',')) return true;                                                    // nothing joined before it
+    e = j; first = false;
+  }
+}
+// Does what stands before the listed word say it is only mentioned? `said` is the clause before the word (after the last "so", "then", "because").
+// A negation counts only within NEAR words of the word. A hand-off word or a "the page says" word counts anywhere in the clause. Neither counts when the clause holds a push word.
+function spoken(said, k, prev) {
+  const lacks = prev === 'to' && said.slice(-5).some((x, j, a) => NEG.has(x) && HAVE_V.has(a[j + 1]));             // "I do not have permission to pay": the negation reaches the verb through "have"
+  const near = lacks || said.slice(-NEAR).some((x) => NEG.has(x)), marker = said.some((x) => HAND.has(x) || SAY.has(x));
+  if (!near && !marker) return false;
+  const negated = (j) => said.slice(Math.max(0, j - 2), j).some((x) => NEG.has(x));                                // "did not click", "could not press": the push word is itself denied
+  const own = (j) => (OWNV.has(said[j - 1]) && said.slice(0, j).some((x) => HAND.has(x) || SAY.has(x))) ||        // "needs to top up", "must top up", "asks me to enter": the hand-off's own verb
+    (prev === 'to' && said.slice(j + 1).some((x) => HAND.has(x)));                                                 // "ask the organizer to pay": the request goes to the person
+  const push = said.some((x, j) => !negated(j) && (STRONG.has(x) || (ASK.has(x) && !own(j))));
+  const claim = k === 'past' && !NEG.has(prev) && said.some((x) => SPEAKER.has(x));                                // "I told the team and deleted it"; "I never deleted it" still passes
+  return !push && !claim;
+}
 
 // Is the listed word at w[i] refused? type: 'done' or 'blocked'.
 function refusedAt(w, i, type) {
@@ -84,8 +128,9 @@ function refusedAt(w, i, type) {
   if (t.startsWith('razor')) return true;                                                                         // the payment provider is never named in a note
   const k = kind(w, i); if (!k && !NOUN.has(t)) return false;
   const before = around(w, i), next = w[i + 1], prev = w[i - 1], after = w.slice(i + 1, i + 5), start = clauseStart(w, i);
-  if (before.some((x) => NEG.has(x) || HAND.has(x) || SAY.has(x))) return false;                                  // negated, handed to a person, or what the page says
-  if (after.slice(0, 2).some((x) => NEG_AFTER.has(x)) || (after.includes('by') && after.some((x) => HAND.has(x))) || after.includes('yourself')) return false; // "pay nothing", "cancelled by the organizer", "enter the password yourself"
+  const said = before.slice(before.reduce((a, x, j) => (CUT.has(x) ? j + 1 : a), 0));                            // only what stands after the last "so", "then", "because"
+  if (spoken(said, k, prev)) return false;                                                                        // negated just before it, handed to a person, or what the page says (and no push word)
+  if (after.slice(0, 2).some((x) => NEG_AFTER.has(x)) || (after.includes('by') && after.some((x) => HAND.has(x)))) return false; // "pay nothing", "cancelled by the organizer"
   const strong = before.some((x) => STRONG.has(x));
   if ((UI.has(next) || (NOUN.has(t) && COMPOUND.has(next)) || (numeric(next) && UI.has(w[i + 2]))) && !strong) return false; // "the Cancel button", "the refund policy", "pay attention": a label or an idiom
   if (TOPIC.has(prev) || TOPIC.has(w[i - 2])) return false;                                                       // "a note about credits"
@@ -93,7 +138,7 @@ function refusedAt(w, i, type) {
   if (k === 'past') {
     const noun = next && !PRON.has(next) && !FUNC.has(next) && next !== ',' && !BREAK.has(next) && !numeric(next);
     if ((DET.has(prev) || numeric(prev) || start) && noun) return false;                                           // "a cancelled booking", "Cancelled games are hidden"
-    if (type === 'blocked' && passive(w, i)) return false;                                                        // "the booking was cancelled": why it is blocked
+    if (type === 'blocked') { const a = auxAt(w, i); if (a >= 0 && safeSubject(w, a)) return false; }             // "the page was removed": why it is blocked. Not "the booking was cancelled".
     if ((prev === 'have' || prev === 'has' || prev === 'had') && !before.some((x) => SPEAKER.has(x) && x !== 'you')) return false; // "12 players have paid": about others
     return true;                                                                                                   // "I paid", "was deleted" in a done note, "Done, deleted the game", "Order refunded"
   }

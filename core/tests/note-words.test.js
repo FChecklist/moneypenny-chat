@@ -4,7 +4,10 @@
 // Now: plan and step stay strict (the owner's rule: they say what the AI will do or did); done and blocked are reports. A listed word still refuses a report unless
 // its sentence shows it is only mentioned (negated, handed to a person, reported from the page, a screen label, a plain noun, how-to words, what a thing does, and in a
 // blocked note a state). A claim, a request, intent, sending credits, asking for "your password" and the payment provider's name are refused.
-// Both sides are tested here, on lists of wordings. The lists hold what the check is meant to do; what it still gets wrong is written in docs/DECISIONS.md (round 7).
+// Both sides are tested here, on lists of wordings. The lists hold what the check is meant to do; what it still gets wrong is written in docs/DECISIONS.md (rounds 7 and 8).
+// 0.4.3 (review of 0.4.2): a negation counts only within 3 words of the listed word; a hand-off or "the page says" word never clears a clause that holds a push word (please, click,
+// an ask word that is not the hand-off's own, "I" with a past verb); "so", "then", "because" start a new thought; "yourself" no longer clears; in a blocked note a state
+// ("was cancelled") passes only for a thing of the screen (page, screen, form, session, link, step, upload, picture).
 import { test, expect } from 'bun:test';
 import { makeEnv, STORES } from './helpers.js';
 import { sha256hex } from '../src/crypto.js';
@@ -61,7 +64,6 @@ const REPORT_OK = [
   "Blocked: please ask a person to sign in.",
   "Blocked: the form wants a password and I do not have one.",
   "Blocked: the form wants a password; I do not have one. Please sign in first.",
-  "Blocked: please sign in and enter the password yourself.",
   "Blocked: sign in first, then I can read the screen.",
   "Blocked. The player list is empty, so there is nothing to remove.",
   "Done. There is nothing to cancel.",
@@ -123,29 +125,34 @@ const REPORT_OK = [
   "Blocked: out of credits. A person needs to buy credits.",
   "Blocked: the organizer has to buy more credits.",
   "Blocked: I need more credits, which a person must add.",
+  // 0.4.3: guards, so the stricter rules do not refuse an honest report
+  "I never deleted anything.",
+  "Done: I did not click Delete.",
+  "Blocked: a person must top up credits.",
+  "Blocked: the organizer must top up credits.",
+  "Blocked: the team will send the credits.",
+  "Blocked: I do not have permission to pay.",
+  "Blocked: I do not have the right to delete the game.",
+  "Blocked: I do not have to pay.",
+  "Blocked: I have no permission to pay.",
+  "Blocked: nothing was deleted on the page.",
+  "Blocked: nothing worked, so a person must pay.",
+  "Done: I did not pay, delete or cancel anything, and I stopped.",
 ];
-// Reports that pass in a BLOCKED note only: a state is why the AI stopped ("the booking was cancelled"). In a done note the same words read as a claim.
+// Reports that pass in a BLOCKED note only: a state of a thing on the screen is why the AI stopped ("the page was removed"). In a done note the same words read as a claim.
+// 0.4.3: only page, screen, form, session, link, step, upload or picture may be the thing. "The booking was cancelled" is in REPORT_BAD below.
 const REPORT_STATE = [
-  "Blocked: my access to the game was removed.",
-  "Blocked because the payment was cancelled by the bank.",
-  "Blocked: the card payment was declined and the order was cancelled.",
   "The page was deleted from the menu.",
-  "Done. The game was cancelled earlier, so I read the log.",
-  "Blocked: the game has been cancelled.",
-  "Blocked: this game was cancelled, so no steps apply.",
-  "Blocked: the event was cancelled.",
-  "Blocked: the ticket was deleted.",
-  "Blocked: the ticket has been erased.",
-  "Done. I got the list and it was removed from view.",
-  "Blocked: I was removed from the game.",
   "Blocked: my link was cancelled.",
   "Blocked: my link was revoked and cancelled.",
-  "Blocked: the key was removed.",
-  "Blocked: the key has expired and was removed.",
-  "Done: the hint was removed after the first try.",
-  "The game is deleted.",
-  "Ownership was transferred.",
-  "The game was deleted.",
+  "Blocked: the screen was removed.",
+  "Blocked: the form has been cancelled.",
+  "Blocked: the session was removed.",
+  "Blocked: the upload was deleted.",
+  "Blocked: the picture was removed.",
+  "Blocked: the step was cancelled.",
+  "Blocked: the payment page was removed.",
+  "Blocked: the page was removed and the link was cancelled.",
 ];
 // Reports that must be refused in done AND blocked: a claim, a request, intent, sending credits, asking for a password, the provider.
 const REPORT_BAD = [
@@ -253,6 +260,59 @@ const REPORT_BAD = [
   "Change the log in password.",
   "Transfer ownership to me.",
   "Move 500 credits to the new account.",
+  // 0.4.3, the review: a clause after a comma or a colon is judged on its own
+  "Nothing failed, deleted the game.",
+  "Cannot wait, delete the game.",
+  "Not done: paid the invoice.",
+  // 0.4.3: a negation far before the word does not speak for it, and "so", "then", "because" start a new thought
+  "Cannot wait so delete the game.",
+  "Nothing worked so please delete the game.",
+  "Nothing else works please delete the game.",
+  "Nothing is wrong with the page and delete the game now.",
+  "Nobody is on the page so delete the game.",
+  "Not sure then pay the invoice.",
+  // 0.4.3: a hand-off or "the page says" never clears a clause with a push word (please, click) or "I" with a past verb
+  "The team is busy and click Delete now.",
+  "The organizer is away please delete the game.",
+  "The organizer is away so please pay the invoice.",
+  "The page says click Delete to continue.",
+  "The page says please pay now.",
+  "A person said click Pay.",
+  "The team is waiting and send 500 credits.",
+  "I told the team and deleted the game.",
+  "I did not hesitate and deleted the game.",
+  // 0.4.3: "yourself" is no longer a hand-off
+  "Delete the game yourself.",
+  "Pay the invoice yourself.",
+  "Please delete it yourself.",
+  "Blocked: please sign in and enter the password yourself.", // moved from REPORT_OK: it tells someone to enter a password, and "yourself" no longer clears a request
+  // 0.4.3: a state of anything but a thing on the screen (page, screen, form, session, link, step, upload, picture) hides who did it
+  "The booking was cancelled.",
+  "Blocked: the booking has been cancelled.",
+  "Blocked: the order was cancelled.",
+  "The game was deleted.",
+  "The player was removed.",
+  "Blocked: it was removed.",
+  "Blocked: the page and the booking were cancelled.",
+  "Blocked: the booking and the page were cancelled.",
+  "Blocked: the name of the game on the page was removed.",
+  "Blocked: the title of the booking page was removed.",
+  "Blocked: my access to the game was removed.",           // moved from REPORT_STATE: the thing is an access to a game, not a thing of the screen
+  "Blocked because the payment was cancelled by the bank.", // moved from REPORT_STATE: a payment is not a thing of the screen
+  "Blocked: the card payment was declined and the order was cancelled.", // moved from REPORT_STATE: the order is not a thing of the screen
+  "Done. The game was cancelled earlier, so I read the log.", // moved from REPORT_STATE: a game is not a thing of the screen
+  "Blocked: the game has been cancelled.",                 // moved from REPORT_STATE: same
+  "Blocked: this game was cancelled, so no steps apply.",  // moved from REPORT_STATE: same
+  "Blocked: the event was cancelled.",                     // moved from REPORT_STATE: an event is not a thing of the screen
+  "Blocked: the ticket was deleted.",                      // moved from REPORT_STATE: a ticket is not a thing of the screen
+  "Blocked: the ticket has been erased.",                  // moved from REPORT_STATE: same
+  "Done. I got the list and it was removed from view.",    // moved from REPORT_STATE: "it" says nothing about what was removed
+  "Blocked: I was removed from the game.",                 // moved from REPORT_STATE: the subject is a person
+  "Blocked: the key was removed.",                         // moved from REPORT_STATE: a key is not a thing of the screen
+  "Blocked: the key has expired and was removed.",         // moved from REPORT_STATE: same
+  "Done: the hint was removed after the first try.",       // moved from REPORT_STATE: a hint is not a thing of the screen
+  "The game is deleted.",                                  // moved from REPORT_STATE: same as "the game was deleted"
+  "Ownership was transferred.",                            // moved from REPORT_STATE: ownership is not a thing of the screen
 ];
 // Plan and step: strict, as before, whole words only.
 const STRICT_BAD = ['Refund the order', 'CANCEL the game', 'Please Remove the player', 'wipe all data', 'purge the list', 'destroy the record', 'transfer the credits to a new owner', 'Transferred it', 'Then change the e-mail on the account', 'change email now', 'update their password', 'reset the password',
@@ -288,6 +348,37 @@ test('an unknown type or a non-string is not decided here (the caller refuses it
   expect(checkNoteText('wish', 'Pay now')).toBeNull(); expect(checkNoteText('blocked', 5)).toBeNull();
 });
 
+// ---- 0.4.3: the review of 0.4.2 found that a negation, a hand-off word or a "the page says" word ANYWHERE earlier in a clause let a listed word through.
+const both = (list, want) => { for (const type of ['done', 'blocked']) for (const t of list) expect([type, t, checkNoteText(type, t)]).toEqual([type, t, want]); };
+test('0.4.3 the sentences the review named are refused in a done and a blocked note', () => {
+  both(['Nothing failed, deleted the game', 'Cannot wait, delete the game', 'Not done: paid the invoice', 'the booking was cancelled', 'Delete the game yourself'], 'forbidden_action');
+});
+test('0.4.3 a negation counts only within 3 words of the listed word: "did not pay" passes, a "no" or "cannot" far back does not', () => {
+  both(['I did not pay.', 'I could not press the Delete button.', 'I do not have permission to pay.', 'Nothing was deleted, removed or paid.', 'There is nothing to cancel.'], null);
+  both(['Cannot wait so delete the game.', 'Nothing else works please delete the game.', 'Nothing is wrong with the page and delete the game now.', 'No errors were seen on the page and delete the game now.', 'Nobody is on the page so delete the game.'], 'forbidden_action');
+});
+test('0.4.3 a hand-off word or "the page says" never clears a clause that holds a push word (please, click, an ask word that is not its own, "I" and a past verb)', () => {
+  both(['A person must pay.', 'The team handles refunds.', 'The page asks me to enter a password, so I stopped.', 'Blocked: ask the organizer to pay the fee.', 'Blocked: a person needs to top up credits.', 'Blocked: the organizer must top up credits.', 'I did not click Pay.'], null);
+  both(['The organizer is away please delete the game.', 'The team is busy and click Delete now.', 'The page says click Delete to continue.', 'A person said click Pay.', 'The team is waiting and send 500 credits.', 'I told the team and deleted the game.', 'I did not hesitate and deleted the game.'], 'forbidden_action');
+  both(['Please ask a person to pay the fee.'], 'forbidden_action'); // "please" is a push word, so the hand-off does not clear the clause
+});
+test('0.4.3 "so", "then" and "because" start a new thought: what stands before them does not speak for a listed word after them', () => {
+  both(['A person must pay because the page needs it.', 'Nothing was deleted, so a person must pay.'], null);
+  both(['Nothing worked so please delete the game.', 'The organizer is away so please pay the invoice.', 'Not sure then pay the invoice.'], 'forbidden_action');
+});
+test('0.4.3 "yourself" is not a hand-off: it no longer clears a request', () => {
+  both(['Delete the game yourself.', 'Pay the invoice yourself.', 'Please delete it yourself.', 'Blocked: please sign in and enter the password yourself.'], 'forbidden_action');
+  both(['A person must delete the game.', 'Blocked: a person must enter the password.'], null);
+});
+test('0.4.3 a state ("was cancelled", "was deleted", "removed", "transferred") passes in a blocked note only for a thing of the screen, and is a claim in a done note', () => {
+  for (const t of ['The page was removed.', 'Blocked: the screen was cancelled.', 'Blocked: the form has been deleted.', 'Blocked: the session was removed.', 'Blocked: the link was cancelled.', 'Blocked: the step was removed.', 'Blocked: the upload was deleted.', 'Blocked: the picture was removed.', 'Blocked: the page was removed and the link was cancelled.']) {
+    expect(['blocked', t, checkNoteText('blocked', t)]).toEqual(['blocked', t, null]); expect(['done', t, checkNoteText('done', t)]).toEqual(['done', t, 'forbidden_action']);
+  }
+  both(['The booking was cancelled.', 'The game was deleted.', 'The player was removed.', 'Ownership was transferred.', 'Blocked: it was removed.', 'Blocked: the order has been cancelled.', 'Blocked: the page and the booking were cancelled.', 'Blocked: the booking and the page were cancelled.',
+    'Blocked: the title of the booking page was removed.', 'Blocked: my access to the page was removed.', 'Blocked: the booking page title was removed.'], 'forbidden_action');
+  both(['Blocked: the event was cancelled by the organizer.', 'Done: the seat was transferred by the team.'], null); // a named person did it: that is a hand-off, as before
+});
+
 for (const store of Object.keys(STORES)) {
   const T0 = 1_800_000_000_000, K = 'mpk_' + 'k'.repeat(40);
   async function rig() { const c = { t: T0 }, e = makeEnv({ store, now: () => c.t }); e.clock = c; await e.call('POST', '/v1/ai-links', { screen: '/', scopes: ['read_ticket', 'report'], key_hash: await sha256hex(K), product_key_id: 'pk1' }); return e; }
@@ -304,7 +395,9 @@ for (const store of Object.keys(STORES)) {
     for (const type of ['blocked', 'done']) {
       const e = await rig(); const ok = await note(e, type, 'The Cancel button is greyed out and the payment page needs a person.'); expect([type, ok.status]).toEqual([type, 201]);
     }
-    for (const [type, text] of [['blocked', 'I paid the bill.'], ['done', 'Please delete the game.'], ['blocked', 'Razorpay was used.'], ['plan', 'The Cancel button is greyed out'], ['step', 'Open the payment page'], ['plan', 'Pay now']]) {
+    { const e = await rig(); expect((await note(e, 'blocked', 'The page was removed.')).status).toBe(201); } // 0.4.3: a state of a thing on the screen still passes in a blocked note
+    for (const [type, text] of [['blocked', 'I paid the bill.'], ['done', 'Please delete the game.'], ['blocked', 'Razorpay was used.'], ['plan', 'The Cancel button is greyed out'], ['step', 'Open the payment page'], ['plan', 'Pay now'],
+      ['blocked', 'The booking was cancelled.'], ['blocked', 'Delete the game yourself.'], ['done', 'Cannot wait so delete the game.']]) { // 0.4.3: these three were accepted before
       const e = await rig(); const r = await note(e, type, text); expect([type, text, r.status, r.body.error]).toEqual([type, text, 403, 'forbidden_action']);
     }
   });
