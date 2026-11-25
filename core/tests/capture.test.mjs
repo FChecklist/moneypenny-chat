@@ -1,6 +1,5 @@
 // C12: capture library, secret masking and the editor. No browser ran: a small fake DOM and plain pixel arrays are used (see KNOWLEDGE.md).
 import { test, expect } from 'bun:test';
-import { readFileSync, readdirSync } from 'node:fs';
 import { isSecretField, maskSecrets } from '../widget/shot/mask.js';
 import { applyBoxes, fitImage, clampBox } from '../widget/shot/pixels.js';
 import { createEditor, mountEditor } from '../widget/shot/editor.js';

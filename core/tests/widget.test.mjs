@@ -1,6 +1,5 @@
 // C7 (S-051 to S-059). A small fake DOM is used: no browser ran. See docs/DECISIONS.md.
 import { test, expect } from 'bun:test';
-import { readFileSync, readdirSync } from 'node:fs';
 import { view, step, initial, ticketBody, LIMITS } from '../widget/model.js';
 import { makeApi } from '../widget/api.js';
 import { mountWidget } from '../widget/widget.js';
